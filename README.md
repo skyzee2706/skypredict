@@ -180,13 +180,6 @@ Price scaling: prices are stored as `uint256` with **8 decimal precision** (e.g.
 
 ---
 
-## 5️⃣ Deploy Frontend to Vercel
-
-1. Import the GitHub repo to [Vercel](https://vercel.com)
-2. Set **Root Directory** → `frontend`
-3. Add all environment variables from `frontend/.env.local`
-4. Deploy → Live!
-
 ---
 
 ## 📐 Architecture
@@ -246,7 +239,7 @@ Example: `GET /api/history?symbol=ETH/USDT&since=1700000000`
 
 | Resource | Link |
 |---|---|
-| Live App | [sky-market-alpha.vercel.app](https://sky-market-alpha.vercel.app) |
+| Live App | [skypredict.app](https://skypredict.app) |
 | Seismic Explorer | [seismic-testnet.socialscan.io](https://seismic-testnet.socialscan.io) |
 | Seismic Testnet RPC | [gcp-1.seismictest.net/rpc](https://gcp-1.seismictest.net/rpc) |
 | CCXT Library | [github.com/ccxt/ccxt](https://github.com/ccxt/ccxt) |
