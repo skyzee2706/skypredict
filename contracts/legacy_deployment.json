@@ -1,0 +1,9 @@
+{
+  "network": "seismic",
+  "token": "0xE2cF0C68B3d2BA0dB99872A2f324C09446AdBD7F",
+  "btcOracle": "0x2F38Ca72f3CEFD6Cf5d1eFa4d177bCbcb2bD6f85",
+  "ethOracle": "0x85ffc84541fa6B9b975CFBe98Eb52663b8768d69",
+  "factory": "0x1f03573ebd472085763157b11728214DF274de3c",
+  "owner": "0xE9973af1b69E407745926fA985C0090E0e78DcF1",
+  "timestamp": "2026-04-21T13:11:05.196Z"
+}

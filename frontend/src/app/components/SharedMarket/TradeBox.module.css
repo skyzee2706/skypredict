@@ -1,0 +1,337 @@
+/* Copying styles from MarketDetailPanel.module.css */
+
+.tradeBox {
+    background-color: color-mix(in srgb, var(--section-bg) 76%, var(--card-bg));
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+}
+
+.toggleSwitch {
+    background-color: color-mix(in srgb, var(--section-bg) 84%, var(--card-bg));
+    border-radius: 9999px;
+    padding: 4px;
+    display: flex;
+    margin-bottom: 16px;
+    width: fit-content;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.toggleOption {
+    padding: 6px 28px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+}
+
+.toggleActive {
+    background-color: var(--surface-elevated);
+    color: var(--foreground);
+    box-shadow: var(--shadow-soft);
+}
+
+.inputGroup {
+    margin-bottom: 16px;
+}
+
+.inputLabel {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pctOptions {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.pctOptions span {
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.pctOptions span:hover {
+    background: color-mix(in srgb, var(--section-bg) 80%, transparent);
+    color: var(--foreground);
+}
+
+.amountInputContainer {
+    position: relative;
+}
+
+.amountInput {
+    width: 100%;
+    padding: 12px 14px;
+    padding-right: 50px;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    background: var(--input-bg);
+    font-size: 15px;
+    font-weight: 500;
+    outline: none;
+    transition: border-color 0.2s;
+    color: var(--foreground);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
+}
+
+.amountInput:focus {
+    border-color: var(--card-border-hover);
+}
+
+.usdcSuffix {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.slippage {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    cursor: pointer;
+}
+
+.outcomeSelect {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.outcomeCard {
+    width: 100%;
+    padding: 12px 16px;
+    border-radius: 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    color: var(--foreground);
+    font-weight: 600;
+    border: 1px solid var(--card-border);
+    font-size: 14px;
+    text-align: left;
+    transition: opacity 0.2s, transform 0.1s;
+}
+
+.outcomeCard:active {
+    transform: scale(0.99);
+}
+
+.outcomeCardGreen {
+    background-color: color-mix(in srgb, var(--surface-elevated) 30%, transparent);
+}
+
+.outcomeCardOrange {
+    background-color: color-mix(in srgb, var(--surface-elevated) 30%, transparent);
+}
+
+.unselectedOutcome {
+    opacity: 0.4;
+}
+
+.outcomeCardGreen.selectedOutcome {
+    opacity: 1;
+    background-color: var(--success-bg);
+    border-color: var(--success);
+    color: var(--foreground);
+    box-shadow: 0 0 16px var(--success-bg);
+}
+
+.outcomeCardOrange.selectedOutcome {
+    opacity: 1;
+    background-color: var(--danger-bg);
+    border-color: var(--danger);
+    color: var(--foreground);
+    box-shadow: 0 0 16px var(--danger-bg);
+}
+
+.outcomeSubtext {
+    font-size: 12px;
+    font-weight: 400;
+    opacity: 0.9;
+    margin-top: 2px;
+}
+
+.payoutButton {
+    width: 100%;
+    margin-top: 16px;
+    padding: 12px;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    border: 1px solid var(--primary);
+    box-shadow: var(--shadow-inset);
+}
+
+.payoutButton:hover {
+    background: color-mix(in srgb, var(--primary) 86%, #fff);
+}
+
+/* Subtle Market State Styles */
+
+.subtleHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.marketStatus {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.outcomeTag {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.outcomeYes {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.outcomeNo {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+
+.statusTag {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--section-bg) 76%, transparent);
+    color: var(--foreground);
+}
+
+.loadingDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--foreground);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+.positionSummary {
+    margin: 16px 0;
+}
+
+.positionRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin: 8px 0;
+    font-size: 14px;
+}
+
+.positionRow span:first-child {
+    color: var(--text-secondary);
+}
+
+.positionRow span:last-child {
+    font-weight: 500;
+    color: var(--foreground);
+}
+
+.winAmount {
+    color: var(--success) !important;
+    font-weight: 600 !important;
+}
+
+.lossText {
+    color: var(--danger) !important;
+}
+
+.waitingText {
+    font-size: 13px;
+    color: var(--text-secondary);
+    font-style: italic;
+    margin: 8px 0;
+}
+
+.noPosition {
+    text-align: center;
+    padding: 16px;
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+.resolveButton {
+    width: 100%;
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-top: 16px;
+}
+
+.resolveButton:hover {
+    background: color-mix(in srgb, var(--primary) 86%, #fff);
+}
+
+.claimButton {
+    width: 100%;
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    margin-top: 12px;
+}
+
+.claimButton:hover {
+    background: color-mix(in srgb, var(--success) 84%, #000);
+}
+
+.divider {
+    height: 1px;
+    background: var(--divider);
+    margin: 16px 0;
+}

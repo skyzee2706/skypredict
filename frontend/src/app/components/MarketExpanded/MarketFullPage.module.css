@@ -1,0 +1,535 @@
+.wrap {
+    background: transparent;
+    min-height: calc(100vh - 64px);
+    padding: 40px var(--spacing-md);
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    /* Left content, Right trading box */
+    gap: 40px;
+}
+
+/* Left Column */
+.mainContent {
+    display: flex;
+    flex-direction: column;
+}
+
+.topBar {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: var(--spacing-lg);
+}
+
+.backButton {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--foreground);
+    box-shadow: var(--shadow-inset);
+}
+
+.metaRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.copyButton {
+    margin-left: 6px;
+    border: 1px solid var(--card-border);
+    background: var(--surface-elevated);
+    border-radius: 6px;
+    padding: 2px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+}
+
+.title {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1.2;
+    margin-bottom: 24px;
+    color: var(--foreground);
+}
+
+.progressSection {
+    margin-bottom: 24px;
+}
+
+.stateRow {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.statePill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    border: 1px solid transparent;
+}
+
+.statePillFinalized {
+    background: color-mix(in srgb, var(--section-bg) 74%, transparent);
+    color: var(--foreground);
+    border-color: var(--card-border-hover);
+}
+
+.statePillResolving {
+    background: color-mix(in srgb, var(--section-bg) 74%, transparent);
+    color: var(--foreground);
+    border-color: var(--card-border-hover);
+}
+
+.statePillActive {
+    background: color-mix(in srgb, var(--section-bg) 74%, transparent);
+    color: var(--foreground);
+    border-color: var(--card-border-hover);
+}
+
+.statePillUndetermined {
+    background: color-mix(in srgb, var(--section-bg) 74%, transparent);
+    color: var(--text-secondary);
+    border-color: var(--card-border);
+}
+
+.stateNote {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.probabilityText {
+    display: flex;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 16px;
+    /* Larger than sidebar */
+    margin-bottom: 8px;
+}
+
+.barBackground {
+    height: 6px;
+    width: 100%;
+    background: color-mix(in srgb, var(--danger) 45%, var(--section-bg));
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.barFill {
+    height: 100%;
+    background-color: color-mix(in srgb, var(--success) 86%, #ffffff);
+    border-radius: 3px;
+}
+
+.volumeRow {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--divider);
+}
+
+.resolutionSection {
+    margin-top: 32px;
+}
+
+.resTabs {
+    display: flex;
+    gap: 24px;
+    border-bottom: 1px solid var(--divider);
+    margin-bottom: 16px;
+}
+
+.resTab {
+    font-size: 14px;
+    font-weight: 600;
+    padding-bottom: 8px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+}
+
+.resTabActive {
+    color: var(--foreground);
+    border-bottom-color: var(--foreground);
+}
+
+.resText {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-secondary);
+}
+
+/* Truth block */
+.truthBlock {
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: color-mix(in srgb, var(--section-bg) 72%, var(--card-bg));
+    margin-bottom: 16px;
+}
+
+.truthHeader {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.truthOutcomeRow {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.truthOutcome {
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+    color: var(--foreground);
+}
+
+.truthOutcomeYes {
+    color: var(--success);
+}
+
+.truthOutcomeNo {
+    color: var(--danger);
+}
+
+.truthOutcomeNeutral {
+    color: var(--text-secondary);
+}
+
+.truthValue {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--foreground);
+    white-space: nowrap;
+}
+
+.truthMeta {
+    display: grid;
+    gap: 6px;
+}
+
+.truthMetaItem {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 8px;
+    align-items: start;
+}
+
+.truthMetaLabel {
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--text-secondary);
+}
+
+.truthMetaValue {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--foreground);
+    line-height: 1.4;
+}
+
+.truthEllipsis {
+    display: inline-block;
+    overflow: hidden;
+    vertical-align: bottom;
+    width: 0;
+    animation: ellipsis 1.2s steps(4, end) infinite;
+}
+
+@keyframes ellipsis {
+    to { width: 1.6em; }
+}
+
+/* Right Column */
+.sidebar {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Finalized Market Styles */
+.finalizedHeader {
+    text-align: center;
+    margin-bottom: var(--spacing-lg);
+    padding-bottom: var(--spacing-md);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.finalizedTitle {
+    font-size: 32px;
+    font-weight: 800;
+    line-height: 1.2;
+    color: var(--foreground);
+    margin: 0 0 var(--spacing-md) 0;
+}
+
+.resolutionOutcome {
+    display: inline-block;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 20px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: var(--spacing-xs);
+}
+
+.outcomeYes {
+    background: rgba(16, 185, 129, 0.1);
+    color: var(--success);
+}
+
+.outcomeNo {
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--danger);
+}
+
+.resolutionDetails {
+    font-size: 16px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.finalizedContent {
+    display: grid;
+    grid-template-columns: 1fr 400px;
+    gap: 40px;
+}
+
+.finalizedLeft {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+}
+
+.finalizedRight {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Section Styles */
+.userResultsSection,
+.marketStatsSection {
+    margin-bottom: var(--spacing-lg);
+}
+
+.sectionTitle {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin: 0 0 var(--spacing-md) 0;
+}
+
+/* User Results */
+.noPositionCard,
+.positionResultCard {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+}
+
+.cardHeader {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin-bottom: var(--spacing-xs);
+}
+
+.noPositionCard p {
+    margin: 0;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.betSummary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+    border-bottom: 1px solid var(--card-border);
+}
+
+.betLabel {
+    font-size: 14px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.betDetails {
+    font-size: 14px;
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.outcomeResult {
+    text-align: center;
+    padding: var(--spacing-md);
+    border-radius: var(--radius-sm);
+}
+
+.resultWin {
+    background: rgba(16, 185, 129, 0.05);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+.resultLoss {
+    background: rgba(239, 68, 68, 0.05);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+.winMessage,
+.lossMessage {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: var(--spacing-xs);
+}
+
+.winMessage {
+    color: var(--success);
+}
+
+.lossMessage {
+    color: var(--danger);
+}
+
+.winAmount {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--success);
+    margin-bottom: var(--spacing-md);
+}
+
+.lossAmount {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--danger);
+}
+
+.claimButton {
+    background: var(--success);
+    color: white;
+    border: none;
+    padding: 14px 28px;
+    border-radius: var(--radius-sm);
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+    width: 100%;
+}
+
+.claimButton:hover {
+    background: color-mix(in srgb, var(--success) 84%, #000);
+}
+
+.claimedStatus {
+    color: var(--success);
+    font-size: 16px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-xs);
+}
+
+/* Market Stats */
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--spacing-sm);
+}
+
+.statCard {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-md);
+    text-align: center;
+}
+
+.statLabel {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 500;
+    margin-bottom: 6px;
+}
+
+.statValue {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+/* Resolution Info */
+.resolutionInfo {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+}
+
+.resolutionInfo p {
+    margin: 0 0 var(--spacing-sm) 0;
+    font-size: 14px;
+    color: var(--foreground);
+    line-height: 1.5;
+}
+
+.resolutionMeta {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .container {
+        grid-template-columns: 1fr;
+    }
+
+    .finalizedContent {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-lg);
+    }
+}

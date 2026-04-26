@@ -1,0 +1,37 @@
+.container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) 0;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--card-border);
+    margin-bottom: var(--spacing-lg);
+    font-size: 13px;
+    /* Small text */
+    white-space: nowrap;
+    scrollbar-width: none;
+    /* Hide scrollbar */
+}
+
+.container::-webkit-scrollbar {
+    display: none;
+}
+
+.item {
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 4px 0;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.item:hover {
+    color: var(--foreground);
+}
+
+.active {
+    color: var(--foreground);
+    font-weight: 600;
+    border-bottom-color: var(--foreground);
+    /* Or primary brand color */
+}

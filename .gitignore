@@ -1,0 +1,134 @@
+# ===============================
+# DEPENDENCIES
+# ===============================
+node_modules/
+jspm_packages/
+frontend/node_modules/
+contracts/node_modules/
+
+# ===============================
+# BUILD OUTPUTS
+# ===============================
+dist/
+build/
+out/
+.next/
+frontend/.next/
+frontend/out/
+frontend/build/
+
+# ===============================
+# HARDHAT / SMART CONTRACT
+# ===============================
+cache/
+artifacts/
+contracts/cache/
+contracts/artifacts/
+contracts/typechain-types/
+typechain/
+typechain-types/
+coverage/
+coverage.json
+gasReporterOutput.json
+
+# ===============================
+# ENVIRONMENT VARIABLES (SECRETS)
+# ===============================
+.env
+.env.local
+.env.*.local
+frontend/.env.local
+frontend/.env.*.local
+contracts/.env
+
+# ===============================
+# LOGS
+# ===============================
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+pm2-*.log
+debug_bot.log
+logs/
+
+# ===============================
+# TYPESCRIPT
+# ===============================
+*.tsbuildinfo
+frontend/tsconfig.tsbuildinfo
+next-env.d.ts
+
+# ===============================
+# NEXT.JS / VERCEL
+# ===============================
+.vercel
+.next/cache
+
+# ===============================
+# PM2
+# ===============================
+*.pid
+
+# ===============================
+# IDE / EDITOR
+# ===============================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+.project
+
+# ===============================
+# OS FILES
+# ===============================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===============================
+# PACKAGE MANAGER
+# ===============================
+.pnpm-store/
+.pnpm-debug.log*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+.pnp.*
+
+# ===============================
+# PROJECT SPECIFIC JUNK
+# ===============================
+# Lock files dari auto-market bot
+scripts/auto-market.lock
+
+# File deployment temporary
+final_factory.txt
+price_history.csv
+tmp/
+
+# File HAR / debug / export lama
+*.har
+old_frontend_files.txt
+old_code/
+pm-kit/
+
+# File debug/log deployment
+contracts/deploy_error.txt
+contracts/deploy_factory_error.txt
+contracts/deploy_log.txt
+contracts/deploy_log_utf8.txt
+contracts/parsed_addresses.txt
+contracts/parsed_factory_addresses.txt
+
+# Sandbox / test file
+anjing.js
+
+# Large image assets yang tidak diperlukan di repo
+IMG_3156.PNG
+"Logo _S_ dengan garis aerodinamis.png"
+image.png

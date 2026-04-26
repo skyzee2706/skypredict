@@ -1,0 +1,217 @@
+.container {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 100vh;
+    background-color: transparent;
+    color: var(--foreground);
+}
+
+.heroSection {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 20px 80px;
+    background-color: transparent;
+    width: 100%;
+}
+
+.liveBadge {
+    border: 1px solid var(--card-border);
+    border-radius: 20px;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--foreground);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 32px;
+    display: inline-block;
+    background-color: color-mix(in srgb, var(--card-bg) 88%, transparent);
+    box-shadow: var(--shadow-inset);
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.heroTitle {
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -2px;
+    margin: 0 0 24px 0;
+    color: var(--foreground);
+    max-width: 800px;
+}
+
+.heroTitle span {
+    color: var(--text-secondary);
+}
+
+.heroSubtitle {
+    font-size: 22px;
+    color: var(--text-secondary);
+    margin-bottom: 60px;
+    font-weight: 400;
+}
+
+.statsRow {
+    display: flex;
+    justify-content: center;
+    gap: 80px;
+    margin-top: 20px;
+    padding-top: 40px;
+    border-top: 1px solid var(--divider);
+    width: 100%;
+    max-width: 800px;
+}
+
+.statItem {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.statValue {
+    font-size: 32px;
+    font-weight: 800;
+    color: var(--foreground);
+    margin-bottom: 8px;
+}
+
+.statLabel {
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 600;
+}
+
+/* 4 Cards Section */
+.howItWorks {
+    padding: 80px 20px;
+    background-color: color-mix(in srgb, var(--section-bg) 76%, transparent);
+    border-top: 1px solid var(--divider);
+    border-bottom: 1px solid var(--divider);
+    width: 100%;
+}
+
+.sectionTitle {
+    text-align: center;
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--foreground);
+    margin-bottom: 48px;
+    letter-spacing: -0.5px;
+}
+
+.cardsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 24px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    padding: 40px 24px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    box-shadow: var(--shadow-card);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-elevated);
+    border-color: var(--card-border-hover);
+}
+
+.cardIcon {
+    font-size: 32px;
+    margin-bottom: 8px;
+    color: var(--foreground);
+}
+
+.cardTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.cardDesc {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+}
+
+.footer {
+    padding: 60px 20px 40px;
+    text-align: center;
+    background-color: transparent;
+    border-top: 1px solid var(--divider);
+    width: 100%;
+}
+
+.footerText {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+    font-weight: 500;
+}
+
+.socialRow {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.socialLink {
+    color: var(--foreground);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: var(--shadow-inset);
+    padding: 8px 16px;
+    border-radius: 30px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.socialLink:hover {
+    background: var(--surface-elevated);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--shadow-soft);
+}
+
+@media (max-width: 768px) {
+    .heroTitle {
+        font-size: 48px;
+    }
+    
+    .statsRow {
+        flex-direction: column;
+        gap: 32px;
+        border-top: none;
+        padding-top: 0;
+    }
+    
+    .card {
+        padding: 32px 20px;
+    }
+}

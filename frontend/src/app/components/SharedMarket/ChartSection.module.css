@@ -1,0 +1,37 @@
+.chartSection {
+    background: var(--card-bg);
+    border-radius: 12px;
+    border: 1px solid var(--card-border);
+    padding: 16px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-card);
+}
+
+.chartValue {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.timeTabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 6px;
+    padding: 2px;
+}
+
+.timeTab {
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.timeTabActive {
+    background: var(--primary);
+    color: var(--primary-foreground);
+}

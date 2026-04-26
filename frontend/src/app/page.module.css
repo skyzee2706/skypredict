@@ -1,0 +1,180 @@
+.mainContainer {
+  display: flex;
+  height: calc(100vh - 64px);
+  /* Minus header */
+  overflow: hidden;
+  background: transparent;
+}
+
+.contentArea {
+  flex: 1;
+  overflow-y: auto;
+  transition: margin-right 0.3s;
+  /* Removed padding here to allow sticky header to reach edges if needed, 
+     but added container class for inner content */
+  display: flex;
+  flex-direction: column;
+}
+
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  /* Relative to contentArea which scrolls */
+  z-index: 40;
+  background-color: color-mix(in srgb, var(--background-soft) 85%, transparent);
+  backdrop-filter: blur(8px);
+  padding: 0 var(--spacing-lg);
+  margin-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--divider);
+}
+
+.scrollContent {
+  padding: 0 var(--spacing-xl) var(--spacing-xl) var(--spacing-xl);
+  /* Increased side padding */
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  /* Fixed 4 columns, prevent blowout with minmax(0, ...) */
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 1400px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1100px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.sidePanelContainer {
+  width: 450px;
+  /* Slightly wider side panel */
+  flex-shrink: 0;
+  border-left: 1px solid var(--divider);
+  background: color-mix(in srgb, var(--card-bg) 94%, transparent);
+  box-shadow: -10px 0 24px rgba(17, 24, 39, 0.06);
+  height: 100%;
+  animation: slideIn 0.3s ease-out;
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+}
+
+@keyframes slideIn {
+  from {
+    width: 0;
+    opacity: 0;
+  }
+
+  to {
+    width: 450px;
+    opacity: 1;
+  }
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  margin-top: var(--spacing-lg);
+}
+
+.sectionTitle {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.stateFilters {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.stateFilter {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-inset);
+}
+
+.stateFilter:hover {
+  color: var(--foreground);
+  border-color: var(--card-border-hover);
+  background: var(--surface-elevated);
+  box-shadow: var(--shadow-soft);
+}
+
+.stateFilterActive {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  border-color: var(--primary);
+}
+
+.stateFilterActive:hover {
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.skeletonGridItem {
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--card-bg) 85%, var(--section-bg));
+  border: 1px solid var(--card-border);
+  height: 280px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.skeletonDetail {
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--card-bg) 85%, var(--section-bg));
+  border: 1px solid var(--card-border);
+  height: 720px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(148, 163, 184, 0.24) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateX(-100%);
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 220px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  border: 1px dashed var(--card-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--section-bg) 84%, transparent);
+}

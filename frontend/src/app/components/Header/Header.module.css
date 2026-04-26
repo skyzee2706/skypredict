@@ -1,0 +1,247 @@
+.header {
+    height: 64px;
+    border-bottom: 1px solid var(--divider);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 var(--spacing-lg);
+    background-color: color-mix(in srgb, var(--background-soft) 88%, transparent);
+    backdrop-filter: blur(14px) saturate(120%);
+    -webkit-backdrop-filter: blur(14px) saturate(120%);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    box-shadow: var(--shadow-soft);
+}
+
+.left {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xl);
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.logoMark {
+    width: 52px;
+    height: 52px;
+    background-color: var(--foreground);
+    mask-image: url("/logo-main.png");
+    mask-size: contain;
+    mask-repeat: no-repeat;
+    mask-position: center;
+    -webkit-mask-image: url("/logo-main.png");
+    -webkit-mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: center;
+}
+
+.brand {
+    display: flex;
+    flex-direction: column;
+}
+
+.brandTitle {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin: 0;
+    color: var(--foreground);
+}
+
+.nav {
+    display: flex;
+    gap: var(--spacing-md);
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.navItem {
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-inset);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    user-select: none;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.navItem:hover {
+    background-color: var(--surface-elevated);
+    border-color: var(--card-border-hover);
+    color: var(--foreground);
+    box-shadow: var(--shadow-soft);
+}
+
+.active {
+    background-color: var(--surface-elevated);
+    border-color: var(--card-border-hover);
+    color: var(--foreground);
+    font-weight: 600;
+}
+
+.right {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.themeToggle {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-inset);
+    color: var(--foreground);
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.themeToggle:hover {
+    border-color: var(--card-border-hover);
+    background: var(--surface-elevated);
+    box-shadow: var(--shadow-soft);
+}
+
+.walletButton {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--card-border);
+    background: var(--card-bg);
+    box-shadow: var(--shadow-inset);
+    color: var(--foreground);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.walletButton:hover:not(:disabled) {
+    background: var(--surface-elevated);
+    border-color: var(--card-border-hover);
+    box-shadow: var(--shadow-soft);
+}
+
+.walletButton:disabled {
+    opacity: 0.7;
+    cursor: default;
+}
+
+.actionLink {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-inset);
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.actionLink:hover {
+    background-color: var(--surface-elevated);
+    border-color: var(--card-border-hover);
+    color: var(--foreground);
+    box-shadow: var(--shadow-soft);
+}
+
+.actionLinkIcon {
+    margin-right: 6px;
+}
+
+.dropdownTrigger {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--card-border);
+    background-color: var(--card-bg);
+    box-shadow: var(--shadow-inset);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    min-width: fit-content;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+}
+
+.dropdownTrigger:hover {
+    border-color: var(--card-border-hover);
+    background-color: var(--surface-elevated);
+}
+
+.tooltipIcon {
+    margin-left: 6px;
+    color: var(--text-muted);
+    display: flex;
+}
+
+.dropdownMenu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 6px;
+    background-color: var(--surface-elevated);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-elevated);
+    z-index: 50;
+    backdrop-filter: blur(16px) saturate(130%);
+    -webkit-backdrop-filter: blur(16px) saturate(130%);
+}
+
+.balanceDropdown {
+    min-width: 170px;
+}
+
+.walletDropdown {
+    min-width: 146px;
+}
+
+.dropdownItem {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 12px 16px;
+    border: none;
+    background-color: transparent;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 8px;
+    color: var(--foreground);
+    text-decoration: none;
+}
+
+.dropdownItem:hover {
+    background-color: color-mix(in srgb, var(--section-bg) 76%, transparent);
+}
+
+.dropdownItemLabel {
+    margin-left: 8px;
+}
