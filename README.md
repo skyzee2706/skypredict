@@ -1,252 +1,266 @@
-# Sky Predict — Multi-Asset Decentralized Prediction Market
+# Sky Predict — Ritual Prediction Markets
 
-> A Polymarket-inspired on-chain prediction market on **Seismic Testnet**.  
-> Built with Solidity, Next.js 16, Privy, wagmi v2, viem, and CCXT (10-CEX median price oracle).
+Sky Predict is a decentralized prediction market for **crypto prices** and **football matches** on the Ritual network.
+Users bet with **SkyUSD** and only pay normal gas when placing bets. The protocol takes a **10% fee only from winner payouts** when users claim.
 
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-skypredict.app-brightgreen)](https://skypredict.app)
-[![Seismic Testnet](https://img.shields.io/badge/Network-Seismic%20Testnet-blueviolet)](https://seismic-testnet.socialscan.io)
+## Features
 
----
+- **Crypto markets** for BTC, ETH, SOL, XRP, DOGE, and BNB.
+- **Sports markets** for selected major football fixtures and all UCL matches.
+- **3-way football betting**: Home, Draw, Away.
+- **Automated market deployment** through `scripts/auto-market.ts`.
+- **Automated crypto resolution** using 10-exchange median pricing.
+- **Automated sports resolution** from football-data.org final scores.
+- **SkyUSD faucet** for testnet usage.
+- **Leaderboard** with PNL and Volume tabs.
+- **Privy + wagmi + viem** wallet integration.
 
-## 🚀 What is Sky Predict?
+## Tech Stack
 
-Sky Predict lets users bet on whether **crypto asset prices will be above or below a target price** at a specific time. Markets run on a fully automated schedule — no manual intervention needed.
+- Solidity + Hardhat
+- Next.js 16 + React 19
+- TypeScript
+- wagmi v2 + viem
+- Privy
+- PM2 scheduler
+- football-data.org API
+- CCXT for crypto market pricing
 
-- **Supported Assets** — BTC, ETH, SOL, XRP, DOGE, BNB
-- **Hourly Markets** — Betting closes 10 minutes before end time; bot resolves at `endTime`
-- **Daily Markets** — Settled at midnight UTC; bot resolves at exactly 00:00 UTC
+## Project Structure
 
-Markets are created, managed, and resolved entirely on-chain by an automated PM2 bot. Resolution uses a **median price aggregated from 10 CEXes** fetched at the exact `endTime`, submitted directly via `resolveWithCustomPrice()`.
-
----
-
-## ✨ Key Features
-
-| Feature | Description |
-|---|---|
-| **Multi-Asset Markets** | BTC, ETH, SOL, XRP, DOGE, BNB — all created and resolved automatically |
-| **10-CEX Median Oracle** | Strike price & resolution price both sourced from median of 10 CEXes (Binance, Bybit, OKX, KuCoin, Gate, Bitget, HTX, MEXC, BitMart, DigiFinex) |
-| **Direct On-Chain Settlement** | Bot calls `resolveWithCustomPrice(price)` with historical median price at exact `endTime` |
-| **Real-Time Price Chart** | Live 1m candle chart aggregated from 10 CEXes via CCXT |
-| **Time-Gated Betting** | Betting closes before `endTime` — enforced on-chain via `bettingEndTime` |
-| **Platform Fee** | 1% fee per bet in native token. Winners claim 100% proportional payout |
-| **Faucet** | Claim free SkyUSDT to start betting (testnet only) |
-| **Portfolio History** | View all past bets and claim winnings from resolved markets |
-| **Privy Auth** | Seamless wallet connection via Privy (social login + embedded wallet) |
-| **PM2 Auto-Scheduler** | Bot sweeps every 60s — creates markets + resolves expired ones |
-| **Leaderboard** | On-chain leaderboard tracking top bettors |
-| **Admin Panel** | Protected admin dashboard for market oversight |
-
----
-
-## 📁 Project Structure
-
-```
-sky-predict/
-├── contracts/                    ← Seismic testnet contract workspace
-│   ├── contracts/
-│   │   ├── BetCOFI.sol           ← Core bet contract (GenLayer compatible)
-│   │   ├── BetFactoryCOFI.sol    ← Factory: create & track all bets
-│   │   ├── ChainlinkOracle.sol   ← Fallback price oracle (Chainlink)
-│   │   ├── IPriceOracle.sol      ← Oracle interface
-│   │   ├── PredictionMarket.sol  ← Legacy: direct price resolution
-│   │   ├── SkyUSDT.sol           ← Mock ERC-20 faucet token
-│   │   └── MockOracle.sol        ← Testing oracle
-│   ├── scripts/
-│   │   └── deploy.ts             ← Deploy to Seismic testnet
-│   └── legacy_deployment.json    ← Latest deployed contract addresses
+```text
+.
+├── contracts/contracts/
+│   ├── MarketFactory.sol        # Deploys and tracks prediction markets
+│   ├── PredictionMarket.sol     # 2-way crypto and 3-way sports market logic
+│   └── SkyUSDT.sol              # SkyUSD faucet token
+├── frontend/
+│   ├── src/app/                 # Next.js app routes
+│   ├── src/hooks/               # Client hooks, including leaderboard
+│   └── src/lib/onchain/         # Contract reads/writes and chain config
 ├── scripts/
-│   ├── auto-market.js            ← PM2 bot: auto-create & resolve markets
-│   ├── auto-market.ts            ← TypeScript source of the bot
-│   └── deploy.ts                 ← Root deployment helper
-├── frontend/                     ← Next.js 16 frontend (deployed on Vercel)
-│   ├── src/app/
-│   │   ├── page.tsx              ← Landing page
-│   │   ├── markets/[id]/         ← Market detail + betting panel
-│   │   ├── faucet/               ← Faucet claim page
-│   │   ├── leaderboard/          ← On-chain leaderboard
-│   │   ├── admin/                ← Protected admin dashboard
-│   │   └── api/
-│   │       ├── price/route.ts    ← Live price: median from 10 CEXes
-│   │       └── history/route.ts  ← OHLCV history (?symbol=BTC/USDT)
-│   ├── src/components/
-│   │   ├── Header/               ← Navbar + Privy wallet connect
-│   │   ├── MarketCard/           ← Market grid card component
-│   │   ├── MarketExpanded/       ← Full market detail + chart + betting
-│   │   ├── SharedMarket/         ← ProbabilityGauge + shared UI
-│   │   ├── LandingView/          ← Hero landing section
-│   │   ├── GenLayerInfo/         ← GenLayer oracle info banner
-│   │   └── Wallet/               ← Wallet state components
-│   ├── src/data/markets.ts       ← Shared market types & data helpers
-│   └── src/lib/onchain/
-│       ├── reads.ts              ← Read contract state (markets, bets)
-│       └── writes.ts             ← Write contract calls (bet, claim, resolve)
-├── ecosystem.config.js           ← PM2 configuration
-└── hardhat.config.ts             ← Hardhat + Seismic network config
+│   ├── auto-market.ts           # Market creation/resolution scheduler
+│   └── sports-markets.json      # Runtime sports cache, gitignored
+├── ecosystem.config.js          # PM2 config
+├── hardhat.config.ts            # Root Hardhat config
+└── .env.example                 # Root env template
 ```
 
----
+## Prerequisites
 
-## 🛠 Prerequisites
+- Node.js 18+
+- npm
+- Git
+- A Ritual wallet with native gas token
+- Privy app credentials
+- football-data.org API key
+- PM2 for production scheduler usage:
 
-- **Node.js** v18+
-- **Privy Account** → [Get App ID at privy.io](https://dashboard.privy.io/)
-- **Seismic Testnet RPC** → `https://gcp-1.seismictest.net/rpc` (Chain ID: 5124)
-- **Deployer Wallet** with Seismic testnet ETH
-- **PM2** (optional, for running the auto-market bot): `npm i -g pm2`
+```bash
+npm install -g pm2
+```
 
----
+## Installation
 
-## 1️⃣ Setup — Root (Contracts + Bot)
+### 1. Clone and install root dependencies
 
 ```bash
 git clone https://github.com/skyzee2706/skypredict.git
 cd skypredict
-
-# Install root dependencies
 npm install
+```
 
-# Copy and fill in environment variables
+### 2. Configure root environment
+
+```bash
 cp .env.example .env
 ```
 
-**.env** (root — for Hardhat and the bot):
+Fill `.env`:
+
 ```env
 PRIVATE_KEY=your_deployer_private_key_without_0x
-SEISMIC_RPC_URL=https://gcp-1.seismictest.net/rpc
-SEISMIC_EXPLORER_API_KEY=
-SEISMIC_EXPLORER_API_URL=https://seismic-testnet.socialscan.io/api
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+RITUAL_EXPLORER_API_KEY=
+RITUAL_EXPLORER_API_URL=https://explorer.ritualfoundation.org/api
+FOOTBALL_DATA_API_KEY=your_football_data_api_key
+FEE_WALLET=0xYourFeeWallet
 ```
 
----
+> Never commit `.env` files. They are ignored by git.
 
-## 2️⃣ Deploy Contracts to Seismic Testnet
-
-```bash
-# Compile contracts
-npx hardhat compile
-
-# Deploy to Seismic testnet
-npx hardhat run scripts/deploy.ts --network seismic
-```
-
-Save the deployed addresses, then fill them into `frontend/.env.local`.
-
----
-
-## 3️⃣ Setup Frontend
+### 3. Install frontend dependencies
 
 ```bash
 cd frontend
-cp .env.example .env.local
-# Fill in your actual values
 npm install
-npm run dev
+cp .env.example .env.local
 ```
 
-**frontend/.env.local**:
+Fill `frontend/.env.local`:
+
 ```env
 NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
 NEXT_PUBLIC_PRIVY_CLIENT_ID=your_privy_client_id
-
-NEXT_PUBLIC_BET_FACTORY_ADDRESS=0x...   # BetFactoryCOFI address
-NEXT_PUBLIC_OWNER_ADDRESS=0x...          # Deployer/owner address
-NEXT_PUBLIC_BRIDGE_SERVICE_URL=https://your-vercel-app.vercel.app
+NEXT_PUBLIC_FACTORY_ADDRESS=0xYourMarketFactory
+NEXT_PUBLIC_BET_FACTORY_ADDRESS=0xYourMarketFactory
+NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_TOKEN_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwnerAddress
+NEXT_PUBLIC_BRIDGE_SERVICE_URL=http://localhost:3000
 ```
 
-Visit `http://localhost:3000`
+### 4. Run frontend locally
 
----
-
-## 4️⃣ Run the Auto-Market Bot (PM2)
-
-The bot automatically:
-- Creates **Hourly** and **Daily** markets for **all 6 assets** (BTC, ETH, SOL, XRP, DOGE, BNB)
-- Fetches **historical median price** from 10 CEXes at exact `endTime` to resolve each market
-- Submits resolution on-chain via `resolveWithCustomPrice(price)` — no external oracle needed
+From `frontend/`:
 
 ```bash
-# From root directory
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:3000
+```
+
+## Contract Workflow
+
+### Compile
+
+From project root:
+
+```bash
+npm run compile
+```
+
+### Deploy to Ritual
+
+```bash
+npm run deploy:ritual
+```
+
+After deploy, copy the deployed addresses into `frontend/.env.local`.
+
+### Export ABI if needed
+
+```bash
+npm run export-abi
+```
+
+## Auto-Market Scheduler
+
+The scheduler handles both crypto and sports markets.
+
+### Local run
+
+From project root:
+
+```bash
+npm run auto-market
+```
+
+### Production run with PM2
+
+```bash
 pm2 start ecosystem.config.js
 pm2 logs sky-market-scheduler
 ```
 
-The bot runs on a **60-second sweep** cycle:
-1. Fetches all markets from `BetFactoryCOFI.getAllMarkets()`
-2. For each **unresolved expired** market → fetches historical median from 10 CEXes at `endTime` → calls `resolveWithCustomPrice(scaledPrice)`
-3. For each ticker (BTC/ETH/SOL/XRP/DOGE/BNB) → creates new Hourly + Daily markets if none exist for the next window
+Restart after code/env changes:
 
-Price scaling: prices are stored as `uint256` with **8 decimal precision** (e.g. `$94,500.00` → `9450000000000`).
-
----
-
----
-
-## 📐 Architecture
-
-```
-User Browser
-    │
-    ├── Privy SDK          →  Wallet connect (social login / embedded wallet)
-    ├── wagmi / viem       →  Seismic RPC (read contract state)
-    ├── /api/price         →  10-CEX median price (CCXT) — live dot
-    └── /api/history?symbol=BTC/USDT → 1m OHLCV history from 10 CEXes
-
-PM2 Bot (scripts/auto-market.ts)
-    │
-    ├── factory.getAllMarkets()           →  scan all markets on-chain
-    │
-    ├── [RESOLVE PATH]
-    │   ├── getHistoricalMedianPrice()   →  fetch 10-CEX 1m candle at endTime
-    │   └── market.resolveWithCustomPrice(scaledPrice)  →  settle on-chain
-    │
-    └── [CREATE PATH]
-        ├── getLiveMedianPrice(ticker)   →  fetch 10-CEX live median as strike
-        └── factory.createMarket(question, strike, endTime, bettingEndTime)
+```bash
+pm2 restart ecosystem.config.js
 ```
 
----
+## Sports Market Automation
 
-## 📊 Supported Assets (Price API)
+The backend uses `GET https://api.football-data.org/v4/matches`.
 
-The `/api/history` and `/api/price` endpoints accept any CCXT-compatible symbol:
+Behavior:
 
-| Asset | Symbol Param |
-|---|---|
-| Bitcoin | `BTC/USDT` |
-| Ethereum | `ETH/USDT` |
-| Solana | `SOL/USDT` |
-| XRP | `XRP/USDT` |
-| Dogecoin | `DOGE/USDT` |
-| BNB | `BNB/USDT` |
+- Discovery runs every **12 hours**.
+- Fixtures are deployed up to **H-5 days** before kickoff.
+- Betting closes exactly at **kickoff**.
+- Resolution scan runs every **10 minutes**.
+- Finished matches resolve using full-time score.
+- Outcome mapping:
+  - `0` = Home / SideA
+  - `1` = Draw
+  - `2` = Away / SideB
 
-Example: `GET /api/history?symbol=ETH/USDT&since=1700000000`
+Runtime state is saved in:
 
----
+```text
+scripts/sports-markets.json
+```
 
-## 💰 Fee Structure
+That file is intentionally gitignored because it is local runtime cache.
+
+## Fee Model
 
 | Action | Fee |
-|---|---|
-| Place Bet | 1% of bet amount, paid in native token upfront |
-| Claim Winnings | Free — 100% proportional payout from losing pool |
-| Lose | Original bet stays in the losing pool |
-| UNDETERMINED Market | Full refund claimable by all bettors |
+|---|---:|
+| Place bet | No protocol fee, gas only |
+| Claim winning payout | 10% protocol fee from payout |
+| Losing bet | No claim |
 
----
+The old native-token fee for placing bets has been removed from the current market flow.
 
-## 🔗 Resources
+## Leaderboard
 
-| Resource | Link |
-|---|---|
-| Live App | [skypredict.app](https://skypredict.app) |
-| Seismic Explorer | [seismic-testnet.socialscan.io](https://seismic-testnet.socialscan.io) |
-| Seismic Testnet RPC | [gcp-1.seismictest.net/rpc](https://gcp-1.seismictest.net/rpc) |
-| CCXT Library | [github.com/ccxt/ccxt](https://github.com/ccxt/ccxt) |
-| Privy Docs | [docs.privy.io](https://docs.privy.io) |
+The leaderboard has two tabs:
 
----
+- **Leaderboard PNL**: claimed payout minus total betting volume.
+- **Leaderboard Volume**: total SkyUSD bet volume.
 
-## 📄 License
+It shows Top 1-10. If the connected wallet is outside Top 10, the page shows the user's exact rank separately.
 
-MIT — Built for Seismic Testnet. Not audited. Use at your own risk.
+Because Ritual RPC limits `eth_getLogs` to 100,000 blocks per request, logs are scanned in chunks.
+
+## Verification Commands
+
+Frontend type check:
+
+```bash
+cd frontend
+npx tsc --noEmit
+```
+
+Frontend lint:
+
+```bash
+cd frontend
+npm run lint
+```
+
+Contract tests:
+
+```bash
+npm test
+```
+
+> Current note: `npm test` may fail on Windows if Hardhat treats files under `contracts/node_modules` as local sources. Use the root workspace dependencies, remove nested contract `node_modules`, or run with a clean install before final CI.
+
+## Deployment Checklist
+
+- [ ] Root `.env` is filled.
+- [ ] `frontend/.env.local` has current contract addresses.
+- [ ] Contracts compile.
+- [ ] Frontend type check passes.
+- [ ] Frontend runs locally.
+- [ ] PM2 scheduler starts successfully.
+- [ ] A test market can be created.
+- [ ] A test bet can be placed after SkyUSD approval.
+- [ ] Claim works on a resolved winner.
+- [ ] Leaderboard loads without RPC range errors.
+
+## Security Notes
+
+- Do not commit private keys, API keys, `.env`, logs, or runtime caches.
+- Use a dedicated deployer wallet.
+- This project is experimental testnet software and has not been professionally audited.
+
+## License
+
+MIT

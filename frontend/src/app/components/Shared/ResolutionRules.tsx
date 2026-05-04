@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { marked } from 'marked';
 import { MarketData } from '../../../data/markets';
 import styles from './ResolutionRules.module.css';
@@ -69,7 +69,7 @@ const ResolutionRules: React.FC<ResolutionRulesProps> = ({
             />
 
             <div className={styles.meta}>
-                Resolution is executed on Seismic Testnet using the market&apos;s on-chain settlement flow.
+                Resolution is executed on Ritual Network using the market&apos;s on-chain settlement flow.
             </div>
         </div>
     );

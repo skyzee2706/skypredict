@@ -180,186 +180,166 @@ const MarketCard: React.FC<MarketCardProps> = ({
                     </div>
                 </div>
                 <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center' }}>
-                    <ProbabilityGauge probability={probability} />
+                    <ProbabilityGauge probability={probability} market={market} />
                 </div>
             </div>
 
-            <div className={styles.graphContainer}>
-                {market?.statsLoading ? (
-                    <div className={styles.statsSkeleton}>
-                        <div className={styles.skeletonBar}></div>
-                    </div>
-                ) : isResolving ? (
-                    <div className={styles.resolvingStage}>
-                        <div className={styles.resolvingBackdrop} aria-hidden="true">
-                            <svg className={styles.graphLine} viewBox="0 0 100 40" preserveAspectRatio="none">
-                                <path
-                                    d="M0,28 C18,30 28,10 46,14 S74,34 100,10"
-                                    fill="none"
-                                    stroke="rgba(39, 39, 42, 0.55)"
-                                    strokeWidth="2"
-                                />
-                                <path
-                                    d="M0,35 L0,40 L100,40 L100,18 C80,22 68,34 52,28 S22,18 0,24 Z"
-                                    fill="rgba(39, 39, 42, 0.12)"
-                                />
-                            </svg>
+            {isResolving || isFinalized || market?.statsLoading ? (
+                <div className={styles.graphContainer}>
+                    {market?.statsLoading ? (
+                        <div className={styles.statsSkeleton}>
+                            <div className={styles.skeletonBar}></div>
                         </div>
-                        <div className={styles.resolvingOverlay}>
-                            <div className={styles.resolvingTitle}>Resolving</div>
-                            <div className={styles.resolvingMeta}>
-                                <div className={styles.resolvingRow}>
-                                    <span className={styles.resolvingLabel}>Deadline</span>
-                                    <span className={styles.resolvingValue}>{deadlineText}</span>
-                                </div>
-                                <div className={styles.resolvingRow}>
-                                    <span className={styles.resolvingLabel}>Rule</span>
-                                    <span className={`${styles.resolvingValue} ${styles.resolvingRule}`}>
-                                        <ResolutionRules market={market} variant="inline" showTitle={false} />
-                                    </span>
+                    ) : isResolving ? (
+                        <div className={styles.resolvingStage}>
+                            <div className={styles.resolvingBackdrop} aria-hidden="true">
+                                <svg className={styles.graphLine} viewBox="0 0 100 40" preserveAspectRatio="none">
+                                    <path
+                                        d="M0,28 C18,30 28,10 46,14 S74,34 100,10"
+                                        fill="none"
+                                        stroke="rgba(39, 39, 42, 0.55)"
+                                        strokeWidth="2"
+                                    />
+                                    <path
+                                        d="M0,35 L0,40 L100,40 L100,18 C80,22 68,34 52,28 S22,18 0,24 Z"
+                                        fill="rgba(39, 39, 42, 0.12)"
+                                    />
+                                </svg>
+                            </div>
+                            <div className={styles.resolvingOverlay}>
+                                <div className={styles.resolvingTitle}>Resolving</div>
+                                <div className={styles.resolvingMeta}>
+                                    <div className={styles.resolvingRow}>
+                                        <span className={styles.resolvingLabel}>Deadline</span>
+                                        <span className={styles.resolvingValue}>{deadlineText}</span>
+                                    </div>
+                                    <div className={styles.resolvingRow}>
+                                        <span className={styles.resolvingLabel}>Rule</span>
+                                        <span className={`${styles.resolvingValue} ${styles.resolvingRule}`}>
+                                            <ResolutionRules market={market} variant="inline" showTitle={false} />
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-                ) : isFinalized ? (
-                    (() => {
-                        const outcomeTone =
-                            market.resolvedOutcome === market.sideAName
-                                ? 'yes'
-                                : market.resolvedOutcome === market.sideBName
-                                    ? 'no'
-                                    : market.resolvedOutcome === 'INVALID'
-                                        ? 'invalid'
-                                        : 'neutral';
+                    ) : (
+                        (() => {
+                            const outcomeTone =
+                                market.resolvedOutcome === market.sideAName
+                                    ? 'yes'
+                                    : market.resolvedOutcome === market.sideBName
+                                        ? 'no'
+                                        : market.resolvedOutcome === 'INVALID'
+                                            ? 'invalid'
+                                            : 'neutral';
 
-                        const finalPrice =
-                            market.deadlinePrice !== undefined
-                                ? `${market.priceSymbol ?? ''}${market.deadlinePrice.toLocaleString()}`
-                                : null;
+                            const finalPrice =
+                                market.deadlinePrice !== undefined
+                                    ? `${market.priceSymbol ?? ''}${market.deadlinePrice.toLocaleString()}`
+                                    : null;
 
-                        const position = userStatus?.position;
-                        const userState = !userStatus?.hasPosition
-                            ? 'none'
-                            : userStatus.userWon
-                                ? userStatus.position?.claimed
-                                    ? 'claimed'
-                                    : userStatus.canClaim
-                                        ? 'claimable'
-                                        : 'won'
-                                : 'lost';
+                            const position = userStatus?.position;
+                            const userState = !userStatus?.hasPosition
+                                ? 'none'
+                                : userStatus.userWon
+                                    ? userStatus.position?.claimed
+                                        ? 'claimed'
+                                        : userStatus.canClaim
+                                            ? 'claimable'
+                                            : 'won'
+                                    : 'lost';
 
-                        const userLine =
-                            userState === 'none'
-                                ? 'No position'
-                                : 'Your stake';
+                            const userLine =
+                                userState === 'none'
+                                    ? 'No position'
+                                    : 'Your stake';
 
-                        const userSubline =
-                            userState === 'none'
-                                ? 'You did not participate'
-                                : userState === 'lost'
-                                    ? position
-                                        ? `${formatVolume(position.amount)} on ${position.outcome}`
-                                        : null
-                                    : userStatus
-                                        ? `+${formatExactUsdl(userStatus.potentialWinnings)}`
-                                        : null;
+                            const userSubline =
+                                userState === 'none'
+                                    ? 'You did not participate'
+                                    : userState === 'lost'
+                                        ? position
+                                            ? `${formatVolume(position.amount)} on ${position.outcome}`
+                                            : null
+                                        : userStatus
+                                            ? `+${formatExactUsdl(userStatus.potentialWinnings)}`
+                                            : null;
 
-                        return (
-                            <div className={styles.finalizedCenter}>
-                                <div className={styles.marketOutcome}>
-                                    <div className={styles.marketOutcomeLabel}>Resolved</div>
-                                    <div
-                                        className={`${styles.marketOutcomeValue} ${
-                                            outcomeTone === 'yes'
-                                                ? styles.marketOutcomeYes
-                                                : outcomeTone === 'no'
-                                                    ? styles.marketOutcomeNo
-                                                    : outcomeTone === 'invalid'
-                                                        ? styles.marketOutcomeInvalid
-                                                        : styles.marketOutcomeNeutral
-                                        }`}
-                                    >
-                                        {market.resolvedOutcome ?? '—'}
-                                    </div>
-                                </div>
-
-                                <div className={styles.marketFacts}>
-                                    <div className={styles.fact}>
-                                        <span className={styles.factLabel}>Closed at</span>
-                                        <span className={styles.factValue}>{finalPrice ?? '—'}</span>
-                                    </div>
-                                </div>
-
-                                <div className={styles.userOutcome}>
-                                    {!isConnected ? (
-                                        <div className={styles.userOutcomeText}>
-                                            <div className={`${styles.userOutcomeLine} ${styles.userOutcomeNeutral}`}>
-                                                Your stake
-                                            </div>
-                                            <div className={styles.userOutcomeSubline}>
-                                                Connect your wallet to start betting.
-                                            </div>
+                            return (
+                                <div className={styles.finalizedCenter}>
+                                    <div className={styles.marketOutcome}>
+                                        <div className={styles.marketOutcomeLabel}>Resolved</div>
+                                        <div
+                                            className={`${styles.marketOutcomeValue} ${
+                                                outcomeTone === 'yes'
+                                                    ? styles.marketOutcomeYes
+                                                    : outcomeTone === 'no'
+                                                        ? styles.marketOutcomeNo
+                                                        : outcomeTone === 'invalid'
+                                                            ? styles.marketOutcomeInvalid
+                                                            : styles.marketOutcomeNeutral
+                                            }`}
+                                        >
+                                            {market.resolvedOutcome ?? '—'}
                                         </div>
-                                    ) : (
-                                        <>
+                                    </div>
+
+                                    <div className={styles.marketFacts}>
+                                        <div className={styles.fact}>
+                                            <span className={styles.factLabel}>Closed at</span>
+                                            <span className={styles.factValue}>{finalPrice ?? '—'}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className={styles.userOutcome}>
+                                        {!isConnected ? (
                                             <div className={styles.userOutcomeText}>
                                                 <div className={`${styles.userOutcomeLine} ${styles.userOutcomeNeutral}`}>
-                                                    {userLine}
+                                                    Your stake
                                                 </div>
-                                                {userSubline && (
-                                                    <div
-                                                        className={
-                                                            userState === 'claimable' || userState === 'won' || userState === 'claimed'
-                                                                ? styles.userOutcomePayout
-                                                                : styles.userOutcomeSubline
-                                                        }
-                                                    >
-                                                        {userSubline}
-                                                    </div>
-                                                )}
+                                                <div className={styles.userOutcomeSubline}>
+                                                    Connect your wallet to start betting.
+                                                </div>
                                             </div>
+                                        ) : (
+                                            <>
+                                                <div className={styles.userOutcomeText}>
+                                                    <div className={`${styles.userOutcomeLine} ${styles.userOutcomeNeutral}`}>
+                                                        {userLine}
+                                                    </div>
+                                                    {userSubline && (
+                                                        <div
+                                                            className={
+                                                                userState === 'claimable' || userState === 'won' || userState === 'claimed'
+                                                                    ? styles.userOutcomePayout
+                                                                    : styles.userOutcomeSubline
+                                                            }
+                                                        >
+                                                            {userSubline}
+                                                        </div>
+                                                    )}
+                                                </div>
 
-                                            {userState === 'claimable' ? (
-                                                <button className={`${styles.claimButton} ${styles.claimButtonShimmer}`} onClick={handleClaim}>
-                                                    Claim
-                                                </button>
-                                            ) : userState === 'claimed' ? (
-                                                <span className={`${styles.claimButton} ${styles.claimButtonClaimed}`}>
-                                                    Claimed
-                                                </span>
-                                            ) : null}
-                                        </>
-                                    )}
+                                                {userState === 'claimable' ? (
+                                                    <button className={`${styles.claimButton} ${styles.claimButtonShimmer}`} onClick={handleClaim}>
+                                                        Claim
+                                                    </button>
+                                                ) : userState === 'claimed' ? (
+                                                    <span className={`${styles.claimButton} ${styles.claimButtonClaimed}`}>
+                                                        Claimed
+                                                    </span>
+                                                ) : null}
+                                            </>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })()
-                ) : market && market.strikePrice !== undefined && deadlineSeconds !== null ? (
-                    <div style={{ height: '100%', width: '100%', pointerEvents: 'none' }}>
-                        <PriceChart
-                            symbol={(market.ticker || "BTC") + "USDT"}
-                            height={160}
-                            startTime={market.creationDate ?? Math.max(0, deadlineSeconds - 3600)}
-                            endTime={deadlineSeconds}
-                            bettingEndTime={market.bettingEndTime ?? Math.max(0, deadlineSeconds - 900)}
-                            strikePrice={market.strikePrice}
-                        />
-                    </div>
-                ) : (
-                    <svg className={styles.graphLine} viewBox="0 0 100 40" preserveAspectRatio="none">
-                        <path
-                            d={
-                                trend === 'up'
-                                    ? 'M0,35 C20,35 40,20 60,15 S80,5 100,5'
-                                    : 'M0,5 C20,10 40,20 60,30 S80,35 100,35'
-                            }
-                            fill="none"
-                            stroke={trend === 'up' ? 'var(--success)' : 'var(--danger)'}
-                            strokeWidth="2"
-                        />
-                    </svg>
-                )}
-            </div>
+                            );
+                        })()
+                    )}
+                </div>
+            ) : (
+                <div style={{ flex: 1 }}></div>
+            )}
 
             <div className={styles.footer}>
                 <div className={styles.footerLeft}>

@@ -18,7 +18,7 @@ interface TradeBoxProps {
 const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }) => {
     void _probability;
     const [amount, setAmount] = useState<string>('');
-    const [selectedOutcome, setSelectedOutcome] = useState<'YES' | 'NO'>('YES');
+    const [selectedOutcome, setSelectedOutcome] = useState<'YES' | 'DRAW' | 'NO'>('YES');
     const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
     const [allowance, setAllowance] = React.useState<bigint | undefined>(undefined);
     const [isDripping, setIsDripping] = React.useState(false);
@@ -366,17 +366,31 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                         >
                             <div>
                                 <div>{market?.sideAName ?? 'YES'}</div>
+                                <small>{Math.round((market?.probYes ?? 0.5) * 100)}%</small>
                             </div>
-                            {selectedOutcome === 'YES' && <span>Do it</span>}
+                            {selectedOutcome === 'YES' && <span>Selected</span>}
                         </button>
+                        {market?.category === 'SPORTS' && (
+                            <button
+                                className={`${styles.outcomeCard} ${styles.outcomeCardDraw ?? styles.outcomeCardOrange} ${selectedOutcome === 'DRAW' ? styles.selectedOutcome : styles.unselectedOutcome}`}
+                                onClick={() => setSelectedOutcome('DRAW')}
+                            >
+                                <div>
+                                    <div>{market?.drawName ?? 'Draw'}</div>
+                                    <small>{Math.round((market?.probDraw ?? 0.2) * 100)}%</small>
+                                </div>
+                                {selectedOutcome === 'DRAW' && <span>Selected</span>}
+                            </button>
+                        )}
                         <button
                             className={`${styles.outcomeCard} ${styles.outcomeCardOrange} ${selectedOutcome === 'NO' ? styles.selectedOutcome : styles.unselectedOutcome}`}
                             onClick={() => setSelectedOutcome('NO')}
                         >
                             <div>
                                 <div>{market?.sideBName ?? 'NO'}</div>
+                                <small>{Math.round((market?.probNo ?? 0.5) * 100)}%</small>
                             </div>
-                            {selectedOutcome === 'NO' && <span>Do it</span>}
+                            {selectedOutcome === 'NO' && <span>Selected</span>}
                         </button>
                     </div>
                 </div>
@@ -419,8 +433,9 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 
                             setIsPlacingBet(true);
                             try {
+                                const selectedLabel = selectedOutcome === 'YES' ? (market.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (market.drawName ?? 'Draw') : (market.sideBName ?? 'NO');
                                 await placeBet(market.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
-                                showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedOutcome}.`, 'success');
+                                showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
                                 await fetchTokenBalance();
                                 await fetchAllowance();
                                 setAmount('');
@@ -441,8 +456,15 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                                     errorMessage.includes('denied')
                                 ) {
                                     showToast('Bet cancelled. You can try again when ready.', 'info');
+                                } else if (errorMessage.includes('betting closed') || errorMessage.includes('beforeend')) {
+                                    showToast('Betting is closed for this market. The deadline has passed.', 'error');
+                                } else if (errorMessage.includes('transferfrom') || errorMessage.includes('erc20') || errorMessage.includes('insufficient allowance')) {
+                                    showToast('Token transfer failed. Please approve SkyUSD first, then try again.', 'error');
+                                } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient eth')) {
+                                    showToast('Insufficient RITUAL for gas. Please get some testnet RITUAL first.', 'error');
                                 } else {
-                                    showToast('Failed to place bet. Please check your wallet and try again.', 'error');
+                                    showToast('Transaction reverted. Please ensure SkyUSD is approved and you have enough RITUAL for gas.', 'error');
+                                    console.error('Bet error details:', { errorMessage, errorCode, error });
                                 }
                             } finally {
                                 setIsPlacingBet(false);
@@ -454,7 +476,8 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                             ? 'Connecting wallet...'
                             : isPlacingBet
                                 ? 'Check your wallet to confirm...'
-                                : `Buy ${selectedOutcome === 'YES' ? (market?.sideAName ?? 'YES') : (market?.sideBName ?? 'NO')} for ${numericAmount > 0 ? numericAmount : '0'} ${TOKEN_SYMBOL}`}
+                                : `Buy ${selectedOutcome === 'YES' ? (market?.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (market?.drawName ?? 'Draw') : (market?.sideBName ?? 'NO')} for ${numericAmount > 0 ? numericAmount : '0'} ${TOKEN_SYMBOL}`}
+
                     </button>
                 )}
             </>

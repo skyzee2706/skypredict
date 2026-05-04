@@ -11,7 +11,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Sky Predict",
-  description: "Prediction market on Seismic Testnet.",
+  description: "Prediction market on Ritual Network — crypto & football.",
   icons: {
     icon: [
       { url: "/favicon-tab.png", sizes: "32x32", type: "image/png" },

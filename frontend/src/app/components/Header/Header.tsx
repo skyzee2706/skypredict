@@ -170,7 +170,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                     <div ref={balanceRef} style={{ position: 'relative', marginRight: '16px' }}>
                         <div className={styles.dropdownTrigger} onClick={handleBalanceClick}>
                             {(Number(tokenBalance) / SKYUSD_MULTIPLIER).toFixed(2)} {TOKEN_SYMBOL}
-                            <Tooltip content={`${TOKEN_SYMBOL} on Seismic Testnet`}>
+                            <Tooltip content={`${TOKEN_SYMBOL} on Ritual Network`}>
                                 <div className={styles.tooltipIcon}>
                                     <InfoIcon size={12} />
                                 </div>
@@ -183,13 +183,13 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                                     <span className={styles.dropdownItemLabel}>{isDripping ? `Getting ${TOKEN_SYMBOL}...` : `Get ${TOKEN_SYMBOL}`}</span>
                                 </button>
                                 <a
-                                    href="https://seismic-testnet.socialscan.io"
+                                    href="https://explorer.ritualfoundation.org"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     className={styles.dropdownItem}
                                 >
                                     <TopUpIcon size={16} />
-                                    <span className={styles.dropdownItemLabel}>Open Seismic Explorer</span>
+                                    <span className={styles.dropdownItemLabel}>Open Ritual Explorer</span>
                                 </a>
                             </div>
                         )}

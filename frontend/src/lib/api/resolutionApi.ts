@@ -1,6 +1,6 @@
-﻿/**
+/**
  * Legacy compatibility helpers.
- * Resolution is now fully on-chain on Seismic Testnet.
+ * Resolution is now fully on-chain on Ritual Network.
  */
 
 export interface ScheduleResolutionRequest {
@@ -19,7 +19,7 @@ export async function scheduleResolution(_params: ScheduleResolutionRequest): Pr
   void _params;
   return {
     success: false,
-    message: 'External scheduling is disabled. Resolution runs on-chain on Seismic Testnet.'
+    message: 'External scheduling is disabled. Resolution runs on-chain on Ritual Network.'
   };
 }
 

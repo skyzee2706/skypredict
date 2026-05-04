@@ -18,7 +18,7 @@ interface MarketFullPageProps {
     // Legacy props for backwards compatibility
     marketTitle?: string;
     probability?: number;
-    type?: 'crypto' | 'stock' | 'other';
+    type?: 'crypto' | 'stock' | 'sport' | 'other';
     identifier?: string;
     description?: string;
     resolutionRule?: string;
@@ -154,21 +154,48 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
         <h1 className={styles.title}>{marketTitle}</h1>
     );
 
-    const renderProgressBar = () => (
-        <div className={styles.progressSection}>
-            <div className={styles.probabilityText}>
-                <span style={{ color: 'var(--foreground)' }}>{probability.toFixed(1)}%</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{(100 - probability).toFixed(1)}%</span>
+    const renderProgressBar = () => {
+        if (market?.category === 'SPORTS') {
+            const probYes = market.probYes * 100;
+            const probDraw = (market.probDraw ?? 0) * 100;
+            const probNo = market.probNo * 100;
+            return (
+                <div className={styles.progressSection}>
+                    <div className={styles.probabilityText}>
+                        <span style={{ color: 'var(--success)' }}>{probYes.toFixed(1)}%</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{probDraw.toFixed(1)}%</span>
+                        <span style={{ color: 'var(--danger)' }}>{probNo.toFixed(1)}%</span>
+                    </div>
+                    <div className={styles.barBackground} style={{ display: 'flex', gap: '2px', backgroundColor: 'transparent' }}>
+                        <div className={styles.barFill} style={{ width: `${probYes}%`, backgroundColor: 'var(--success)', height: '100%', borderRadius: '4px' }}></div>
+                        <div className={styles.barFill} style={{ width: `${probDraw}%`, backgroundColor: 'var(--text-secondary)', height: '100%', borderRadius: '4px' }}></div>
+                        <div className={styles.barFill} style={{ width: `${probNo}%`, backgroundColor: 'var(--danger)', height: '100%', borderRadius: '4px' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideAName ?? 'Home'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.drawName ?? 'Draw'}</span>
+                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideBName ?? 'Away'}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className={styles.progressSection}>
+                <div className={styles.probabilityText}>
+                    <span style={{ color: 'var(--foreground)' }}>{probability.toFixed(1)}%</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{(100 - probability).toFixed(1)}%</span>
+                </div>
+                <div className={styles.barBackground}>
+                    <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideAName ?? 'Side A'}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideBName ?? 'Side B'}</span>
+                </div>
             </div>
-            <div className={styles.barBackground}>
-                <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideAName ?? 'Side A'}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideBName ?? 'Side B'}</span>
-            </div>
-        </div>
-    );
+        );
+    };
 
     const renderVolumeRow = () => (
         <div className={styles.volumeRow}>

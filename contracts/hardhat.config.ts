@@ -1,4 +1,4 @@
-﻿import { HardhatUserConfig } from "hardhat/config";
+import { HardhatUserConfig } from "hardhat/config";
 import "@nomicfoundation/hardhat-toolbox";
 import "dotenv/config";
 
@@ -14,28 +14,47 @@ const config: HardhatUserConfig = {
     },
   },
   networks: {
+    ritual: {
+      url:
+        process.env.RITUAL_RPC_URL ||
+        process.env.SEISMIC_RPC_URL ||
+        "https://rpc.ritualfoundation.org",
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      chainId: 1979,
+    },
     seismic: {
       url:
+        process.env.RITUAL_RPC_URL ||
         process.env.SEISMIC_RPC_URL ||
-        process.env.BASE_SEPOLIA_RPC_URL ||
-        "https://gcp-1.seismictest.net/rpc",
+        "https://rpc.ritualfoundation.org",
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 5124,
+      chainId: 1979,
     },
   },
   etherscan: {
     apiKey: {
-      seismic: process.env.SEISMIC_EXPLORER_API_KEY || "",
+      ritual: process.env.RITUAL_EXPLORER_API_KEY || "",
+      seismic: process.env.RITUAL_EXPLORER_API_KEY || "",
     },
     customChains: [
       {
-        network: "seismic",
-        chainId: 5124,
+        network: "ritual",
+        chainId: 1979,
         urls: {
           apiURL:
-            process.env.SEISMIC_EXPLORER_API_URL ||
-            "https://seismic-testnet.socialscan.io/api",
-          browserURL: "https://seismic-testnet.socialscan.io",
+            process.env.RITUAL_EXPLORER_API_URL ||
+            "https://explorer.ritualfoundation.org/api",
+          browserURL: "https://explorer.ritualfoundation.org",
+        },
+      },
+      {
+        network: "seismic",
+        chainId: 1979,
+        urls: {
+          apiURL:
+            process.env.RITUAL_EXPLORER_API_URL ||
+            "https://explorer.ritualfoundation.org/api",
+          browserURL: "https://explorer.ritualfoundation.org",
         },
       },
     ],

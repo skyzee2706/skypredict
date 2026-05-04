@@ -9,6 +9,6 @@ export const wagmiConfig = createConfig({
         coinbaseWallet({ appName: 'PM Kit' })
     ],
     transports: {
-        [seismicTestnet.id]: http(process.env.NEXT_PUBLIC_SEISMIC_RPC_URL || 'https://gcp-1.seismictest.net/rpc')
+        [seismicTestnet.id]: http(process.env.NEXT_PUBLIC_RITUAL_RPC_URL || process.env.NEXT_PUBLIC_SEISMIC_RPC_URL || 'https://rpc.ritualfoundation.org')
     }
 });

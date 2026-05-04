@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -58,7 +58,7 @@ const AdminPage: React.FC = () => {
             const endDateMs = new Date(form.endDate).getTime();
             const endDateSeconds = Math.floor(endDateMs / 1000);
 
-            // Old contract flow running on Seismic Testnet
+            // Old contract flow running on Ritual Network
             await createBet({
                 title: form.title,
                 resolutionCriteria: form.resolutionCriteria,

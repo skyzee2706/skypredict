@@ -168,6 +168,18 @@
     box-shadow: 0 0 16px var(--danger-bg);
 }
 
+.outcomeCardDraw {
+    background-color: color-mix(in srgb, var(--soft-sage, #B9C3B7) 24%, transparent);
+}
+
+.outcomeCardDraw.selectedOutcome {
+    opacity: 1;
+    background-color: color-mix(in srgb, var(--soft-sage, #B9C3B7) 38%, transparent);
+    border-color: var(--main-green, #65977F);
+    color: var(--foreground);
+    box-shadow: 0 0 18px color-mix(in srgb, var(--soft-sage, #B9C3B7) 42%, transparent);
+}
+
 .outcomeSubtext {
     font-size: 12px;
     font-weight: 400;

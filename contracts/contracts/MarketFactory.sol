@@ -2,60 +2,120 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/proxy/Clones.sol";
 import "./PredictionMarket.sol";
 
 /**
  * @title MarketFactory
- * @notice Deploys and tracks PredictionMarket instances.
- *         Holds references to the swappable oracle and SkyUSDT token.
+ * @notice Deploys and tracks prediction markets for crypto and sports using EIP-1167 clones.
  */
 contract MarketFactory is Ownable {
-    address public oracle;       // BTC/USD — settlement
-    address public ethUsdOracle; // ETH/USD — fee calculation
-    address public token;        // SkyUSDT
+    address public oracle;
+    address public ethUsdOracle;
+    address public token;
+    address public predictionMarketImplementation;
 
     address[] public markets;
 
     event MarketCreated(
         address indexed market,
-        string  question,
+        string question,
+        string sideAName,
+        string drawName,
+        string sideBName,
+        string marketType,
         uint256 strikePrice,
         uint256 endTime
     );
     event OracleUpdated(address newOracle);
     event TokenUpdated(address newToken);
+    event ImplementationUpdated(address newImplementation);
 
     constructor(address _oracle, address _ethUsdOracle, address _token, address initialOwner) Ownable(initialOwner) {
-        oracle       = _oracle;
+        oracle = _oracle;
         ethUsdOracle = _ethUsdOracle;
-        token        = _token;
+        token = _token;
+        // The implementation can be set later, or we can deploy one immediately
+        predictionMarketImplementation = address(new PredictionMarket());
     }
 
-    // ── Market Creation ───────────────────────────────────────────────────
+    function setImplementation(address _impl) external onlyOwner {
+        predictionMarketImplementation = _impl;
+        emit ImplementationUpdated(_impl);
+    }
 
     function createMarket(
-        string  memory question,
+        string memory question,
         uint256 strikePrice,
         uint256 endTime,
         uint256 bettingEndTime
     ) external onlyOwner returns (address) {
-        PredictionMarket market = new PredictionMarket(
+        return _createMarket(
+            question,
+            "YES",
+            "DRAW",
+            "NO",
+            "CRYPTO",
+            strikePrice,
+            endTime,
+            bettingEndTime
+        );
+    }
+
+    function createMarketWithOutcomes(
+        string memory question,
+        string memory sideAName,
+        string memory drawName,
+        string memory sideBName,
+        string memory marketType,
+        uint256 strikePrice,
+        uint256 endTime,
+        uint256 bettingEndTime
+    ) external onlyOwner returns (address) {
+        return _createMarket(
+            question,
+            sideAName,
+            drawName,
+            sideBName,
+            marketType,
+            strikePrice,
+            endTime,
+            bettingEndTime
+        );
+    }
+
+    function _createMarket(
+        string memory question,
+        string memory sideAName,
+        string memory drawName,
+        string memory sideBName,
+        string memory marketType,
+        uint256 strikePrice,
+        uint256 endTime,
+        uint256 bettingEndTime
+    ) internal returns (address) {
+        require(predictionMarketImplementation != address(0), "Implementation not set");
+        address clone = Clones.clone(predictionMarketImplementation);
+        PredictionMarket(clone).initialize(
             token,
             oracle,
             ethUsdOracle,
             question,
+            sideAName,
+            drawName,
+            sideBName,
+            marketType,
             strikePrice,
             endTime,
             bettingEndTime,
-            owner(),       // market owner = factory owner
-            owner()        // fee wallet = factory owner
+            owner(),
+            owner()
         );
-        markets.push(address(market));
-        emit MarketCreated(address(market), question, strikePrice, endTime);
-        return address(market);
-    }
 
-    // ── Admin ─────────────────────────────────────────────────────────────
+        markets.push(clone);
+        emit MarketCreated(clone, question, sideAName, drawName, sideBName, marketType, strikePrice, endTime);
+        return clone;
+    }
 
     function setOracle(address _oracle) external onlyOwner {
         oracle = _oracle;
@@ -66,8 +126,6 @@ contract MarketFactory is Ownable {
         token = _token;
         emit TokenUpdated(_token);
     }
-
-    // ── Views ─────────────────────────────────────────────────────────────
 
     function getAllMarkets() external view returns (address[] memory) {
         return markets;

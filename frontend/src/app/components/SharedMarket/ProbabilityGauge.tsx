@@ -1,14 +1,36 @@
 import React from 'react';
 import styles from './ProbabilityGauge.module.css';
+import { MarketData } from '../../../data/markets';
 
 interface ProbabilityGaugeProps {
     probability: number; // 0 to 100
+    market?: MarketData;
 }
 
-const ProbabilityGauge: React.FC<ProbabilityGaugeProps> = ({ probability }) => {
-    // SVG Arc calculations
-    // Radius 25, Center (30, 30)
-    // We want a semi-circle from -90deg (left) to 90deg (right)
+const ProbabilityGauge: React.FC<ProbabilityGaugeProps> = ({ probability, market }) => {
+    // If it's a sports market, display a 3-way compact textual odds indicator
+    if (market?.category === 'SPORTS') {
+        const probYes = (market.probYes * 100).toFixed(0);
+        const probDraw = ((market.probDraw ?? 0) * 100).toFixed(0);
+        const probNo = (market.probNo * 100).toFixed(0);
+        
+        return (
+            <div className={styles.sportsOdds} aria-label="Sports market odds">
+                <div className={`${styles.sportsOutcome} ${styles.sideAOutcome}`}>
+                    <span className={styles.outcomeLabel}>{market.sideAName ?? 'Home'}</span>
+                    <strong>{probYes}%</strong>
+                </div>
+                <div className={`${styles.sportsOutcome} ${styles.drawOutcome}`}>
+                    <span className={styles.outcomeLabel}>{market.drawName ?? 'Draw'}</span>
+                    <strong>{probDraw}%</strong>
+                </div>
+                <div className={`${styles.sportsOutcome} ${styles.sideBOutcome}`}>
+                    <span className={styles.outcomeLabel}>{market.sideBName ?? 'Away'}</span>
+                    <strong>{probNo}%</strong>
+                </div>
+            </div>
+        );
+    }
 
     // Normalized probability between 0 and 1
     const p = Math.min(Math.max(probability, 0), 100) / 100;

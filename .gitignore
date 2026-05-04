@@ -37,12 +37,20 @@ gasReporterOutput.json
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
+frontend/.env
 frontend/.env.local
 frontend/.env.*.local
+frontend/.env.development
+frontend/.env.production
 contracts/.env
+contracts/.env.local
+!*.env.example
+!frontend/.env.example
 
 # ===============================
-# LOGS
+# LOGS / RUNTIME STATE
 # ===============================
 *.log
 npm-debug.log*
@@ -52,24 +60,18 @@ yarn-error.log*
 pm2-*.log
 debug_bot.log
 logs/
+*.pid
+scripts/auto-market.lock
+scripts/sports-markets.json
 
 # ===============================
-# TYPESCRIPT
+# TYPESCRIPT / NEXT.JS / VERCEL
 # ===============================
 *.tsbuildinfo
 frontend/tsconfig.tsbuildinfo
 next-env.d.ts
-
-# ===============================
-# NEXT.JS / VERCEL
-# ===============================
 .vercel
 .next/cache
-
-# ===============================
-# PM2
-# ===============================
-*.pid
 
 # ===============================
 # IDE / EDITOR
@@ -101,34 +103,31 @@ desktop.ini
 .pnp.*
 
 # ===============================
-# PROJECT SPECIFIC JUNK
+# DEBUG / LOCAL EXPORTS
 # ===============================
-# Lock files dari auto-market bot
-scripts/auto-market.lock
-
-# File deployment temporary
 final_factory.txt
 price_history.csv
 tmp/
-
-# File HAR / debug / export lama
 *.har
 old_frontend_files.txt
 old_code/
 pm-kit/
-
-# File debug/log deployment
 contracts/deploy_error.txt
 contracts/deploy_factory_error.txt
 contracts/deploy_log.txt
 contracts/deploy_log_utf8.txt
 contracts/parsed_addresses.txt
 contracts/parsed_factory_addresses.txt
+contracts/ritual_deployment.local.json
+contracts/legacy_deployment.local.json
 
-# Sandbox / test file
+# Sandbox / throwaway files
 anjing.js
+bot.js
+runner.js
+test-faucet.js
 
-# Large image assets yang tidak diperlukan di repo
+# Large local images not required for source
 IMG_3156.PNG
 "Logo _S_ dengan garis aerodinamis.png"
 image.png

@@ -1,12 +1,13 @@
 {
     "name": "prediction-market-contracts",
     "version": "1.0.0",
-    "description": "Polymarket-inspired prediction market contracts on Seismic testnet",
+    "description": "Professional crypto and sports prediction market contracts on Ritual network",
     "scripts": {
         "compile": "hardhat compile",
         "test": "hardhat test",
-        "deploy:seismic": "hardhat run scripts/deploy.ts --network seismic",
-        "deploy:sepolia": "hardhat run scripts/deploy.ts --network seismic",
+        "deploy:ritual": "hardhat run scripts/deploy.ts --network ritual",
+        "deploy:seismic": "hardhat run scripts/deploy.ts --network ritual",
+        "deploy:sepolia": "hardhat run scripts/deploy.ts --network ritual",
         "export-abi": "node scripts/export-abi.js",
         "auto-market": "ts-node scripts/auto-market.ts"
     },

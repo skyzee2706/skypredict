@@ -39,7 +39,7 @@ const PrivyWalletContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
                     try {
                         await primaryWallet.switchChain(seismicTestnet.id);
                     } catch (e) {
-                        console.error('Failed to switch to Seismic Testnet:', e);
+                        console.error('Failed to switch to Ritual Network:', e);
                     }
                 }
             }

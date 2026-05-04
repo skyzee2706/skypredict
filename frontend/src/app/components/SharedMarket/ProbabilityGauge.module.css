@@ -16,3 +16,58 @@
     color: var(--foreground);
     letter-spacing: -0.5px;
 }
+
+.sportsOdds {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(44px, 1fr));
+    gap: 4px;
+    width: min(190px, 42vw);
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.025));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.sportsOutcome {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+    padding: 5px 4px;
+    border-radius: 10px;
+    background: rgba(9, 9, 11, 0.38);
+    line-height: 1;
+}
+
+.outcomeLabel {
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 8px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.02em;
+}
+
+.sportsOutcome strong {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+}
+
+.sideAOutcome strong {
+    color: var(--success);
+}
+
+.drawOutcome strong {
+    color: hsl(43, 96%, 62%);
+}
+
+.sideBOutcome strong {
+    color: var(--danger);
+}

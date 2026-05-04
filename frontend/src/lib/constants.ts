@@ -1,4 +1,4 @@
-﻿import { Abi } from 'viem';
+import { Abi } from 'viem';
 import MarketFactoryAbi from './contracts/MarketFactory.json';
 
 export const TOKEN_ADDRESS =
@@ -12,7 +12,7 @@ export const FACTORY_ADDRESS =
     process.env.NEXT_PUBLIC_BET_FACTORY_ADDRESS ||
     '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
-export const FACTORY_ABI = MarketFactoryAbi as Abi;
+export const FACTORY_ABI = MarketFactoryAbi.abi as unknown as Abi;
 
 export const TOKEN_SYMBOL = 'SkyUSD';
 

@@ -19,7 +19,7 @@ interface MarketDetailPanelProps {
     // Legacy props for backwards compatibility
     marketTitle?: string;
     probability?: number;
-    type?: 'crypto' | 'stock' | 'other';
+    type?: 'crypto' | 'stock' | 'sport' | 'other';
     identifier?: string;
     description?: string;
     volume?: number;

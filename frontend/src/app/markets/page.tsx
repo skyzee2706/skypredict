@@ -87,11 +87,10 @@ export default function MarketsPage() {
 
     const filteredMarkets = currentMarkets
         .filter(market => {
-            // Map UI category labels to contract enums
             const matchesCategory =
                 activeCategory === 'All' ||
                 (activeCategory === 'Crypto' && market.category === 'CRYPTO') ||
-                (activeCategory === 'Economy' && market.category === 'STOCKS');
+                (activeCategory === 'Sports' && market.category === 'SPORTS');
             return matchesCategory;
         })
         .sort((a, b) => {

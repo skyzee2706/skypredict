@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import Image from 'next/image';
 import styles from './GenLayerInfo.module.css';
 
@@ -23,11 +23,11 @@ const GenLayerInfo: React.FC<GenLayerInfoProps> = ({ onClose }) => {
 
             <div className={styles.content}>
                 <p className={styles.description} style={{ marginBottom: '10px' }}>
-                    Sky Predict resolves markets fully on Seismic Testnet using on-chain contracts.
+                    Sky Predict resolves markets fully on Ritual Network using on-chain contracts.
                 </p>
 
                 <ul className={styles.description} style={{ paddingLeft: '20px', margin: '10px 0' }}>
-                    <li>Market creation and settlement run on Seismic Testnet</li>
+                    <li>Market creation and settlement run on Ritual Network</li>
                     <li>Price reference uses median of 10 exchanges</li>
                     <li>Resolution is executed directly by the market contract</li>
                     <li>No bridge or external resolution layer is required</li>

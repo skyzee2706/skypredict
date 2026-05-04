@@ -23,15 +23,22 @@
     padding: 4px 0;
     border-bottom: 2px solid transparent;
     transition: color 0.2s, border-color 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
 }
 
 .item:hover {
     color: var(--foreground);
 }
 
+.icon {
+    display: inline-flex;
+    align-items: center;
+}
+
 .active {
     color: var(--foreground);
     font-weight: 600;
     border-bottom-color: var(--foreground);
-    /* Or primary brand color */
 }

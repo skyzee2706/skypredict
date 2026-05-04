@@ -2,220 +2,237 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "./IPriceOracle.sol";
 
 /**
  * @title PredictionMarket
- * @notice Binary YES/NO prediction market settled by an on-chain oracle.
+ * @notice Multi-outcome prediction market supporting binary crypto markets and
+ *         3-way football markets (Team A / Draw / Team B).
  *         Betting is done with SkyUSDT (ERC-20, 6 decimals).
- *         1% platform fee collected upfront as ETH at bet time (based on ETH/USD price).
- *         No fee is taken from winnings — full payout goes to winners.
  */
-contract PredictionMarket is Ownable {
-    // ── Token ─────────────────────────────────────────────────────────────
-    IERC20  public immutable token;     // SkyUSDT
-
-    // ── Oracles ───────────────────────────────────────────────────────────
-    IPriceOracle public immutable oracle;        // BTC/USD — settlement
-    IPriceOracle public immutable ethUsdOracle;  // ETH/USD — fee calculation
-
-    // ── Market params ─────────────────────────────────────────────────────
-    string  public question;
-    uint256 public strikePrice;
-    uint256 public endTime;
-    uint256 public bettingEndTime; // Betting closes before settlement
-
-    // ── State ─────────────────────────────────────────────────────────────
-    bool    public resolved;
-    bool    public result;   // true = YES won, false = NO won
-    uint256 public settlementPrice;
-
-    uint256 public yesPool;
-    uint256 public noPool;
-
-    // ── User positions ────────────────────────────────────────────────────
-    mapping(address => uint256) public yesBets;
-    mapping(address => uint256) public noBets;
-    mapping(address => bool)    public claimed;
-
-    // ── Fee ───────────────────────────────────────────────────────────────
-    address public feeWallet;
-
-    // ── Price proxy (for frontend) ────────────────────────────────────────
-    // Returns latest YES price as a fraction of 1e18 (50% = 5e17)
-    function yesPrice() external view returns (uint256) {
-        uint256 total = yesPool + noPool;
-        if (total == 0) return 5e17;  // default 50/50
-        return (yesPool * 1e18) / total;
+contract PredictionMarket is Initializable, OwnableUpgradeable {
+    enum Outcome {
+        SideA,
+        Draw,
+        SideB
     }
 
-    // ── Events ────────────────────────────────────────────────────────────
-    event BetPlaced(address indexed user, bool isYes, uint256 amount, uint256 ethFeePaid);
-    event MarketResolved(bool result, uint256 oraclePrice);
+    IERC20 public token;
+    IPriceOracle public oracle;
+    IPriceOracle public ethUsdOracle;
+
+    string public question;
+    string public sideAName;
+    string public drawName;
+    string public sideBName;
+    string public marketType;
+
+    uint256 public strikePrice;
+    uint256 public endTime;
+    uint256 public bettingEndTime;
+
+    bool public resolved;
+    Outcome public winningOutcome;
+    uint256 public settlementPrice;
+
+    uint256 public sideAPool;
+    uint256 public drawPool;
+    uint256 public sideBPool;
+
+    mapping(address => uint256) public sideABets;
+    mapping(address => uint256) public drawBets;
+    mapping(address => uint256) public sideBBets;
+    mapping(address => bool) public claimed;
+
+    address public feeWallet;
+
+    event BetPlaced(address indexed user, Outcome indexed outcome, uint256 amount, uint256 ethFeePaid);
+    event MarketResolved(Outcome indexed outcome, uint256 settlementValue);
     event Claimed(address indexed user, uint256 payout);
 
-    // ── Modifiers ─────────────────────────────────────────────────────────
+    function _nowSeconds() internal view returns (uint256) {
+        // Ritual testnet currently exposes block.timestamp in milliseconds on-chain/RPC.
+        // Market deadlines are stored in Unix seconds, so normalize defensively.
+        return block.timestamp > 1e12 ? block.timestamp / 1000 : block.timestamp;
+    }
+
     modifier beforeEnd() {
-        require(block.timestamp < bettingEndTime, "Market: betting closed");
+        require(_nowSeconds() < bettingEndTime, "Market: betting closed");
         _;
     }
 
     modifier afterEnd() {
-        require(block.timestamp >= endTime, "Market: not ended yet");
+        require(_nowSeconds() >= endTime, "Market: not ended yet");
         _;
     }
 
-    // ── Constructor ───────────────────────────────────────────────────────
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
         address _token,
         address _oracle,
         address _ethUsdOracle,
-        string  memory _question,
+        string memory _question,
+        string memory _sideAName,
+        string memory _drawName,
+        string memory _sideBName,
+        string memory _marketType,
         uint256 _strikePrice,
         uint256 _endTime,
         uint256 _bettingEndTime,
         address _owner,
         address _feeWallet
-    ) Ownable(_owner) {
-        token          = IERC20(_token);
-        oracle         = IPriceOracle(_oracle);
-        ethUsdOracle   = IPriceOracle(_ethUsdOracle);
-        question       = _question;
-        strikePrice    = _strikePrice;
-        endTime        = _endTime;
+    ) public initializer {
+        __Ownable_init(_owner);
+        token = IERC20(_token);
+        oracle = IPriceOracle(_oracle);
+        ethUsdOracle = IPriceOracle(_ethUsdOracle);
+        question = _question;
+        sideAName = _sideAName;
+        drawName = _drawName;
+        sideBName = _sideBName;
+        marketType = _marketType;
+        strikePrice = _strikePrice;
+        endTime = _endTime;
         bettingEndTime = _bettingEndTime;
-        feeWallet      = _feeWallet;
+        feeWallet = _feeWallet;
     }
 
-    // ── Fee Calculation ───────────────────────────────────────────────────
-
-    /**
-     * @notice Calculate the ETH fee required for a given USDT bet amount.
-     *         Fee = 1% of bet value, converted to ETH using current ETH/USD oracle price.
-     * @param amount  USDT amount in 6-decimal units (e.g. 100 USDT = 100_000_000)
-     * @return feeWei ETH fee in wei
-     *
-     * Derivation:
-     *   feeUSD  = amount / 1e6 / 100                  (1% of bet in USD)
-     *   ethPrice = ethUsdOracle.getPrice() / 1e8       (USD per ETH)
-     *   feeETH  = feeUSD / ethPrice                    (ETH units)
-     *   feeWei  = feeETH * 1e18
-     *           = amount * 1e18 / (1e6 * 100) / (ethPrice / 1e8)
-     *           = amount * 1e18 * 1e8 / (1e8 * ethPrice)
-     *           = amount * 1e18 / ethPrice
-     */
-    function calcEthFee(uint256 amount) public view returns (uint256 feeWei) {
-        uint256 ethPrice = ethUsdOracle.getPrice(); // ETH/USD price, 8 decimals
-        require(ethPrice > 0, "ETH oracle error");
-        feeWei = (amount * 1e18) / ethPrice;
+    function totalPool() public view returns (uint256) {
+        return sideAPool + drawPool + sideBPool;
     }
 
-    // ── Betting ───────────────────────────────────────────────────────────
+    function outcomePrice(Outcome outcome) public view returns (uint256) {
+        uint256 total = totalPool();
+        if (total == 0) return 333333333333333333;
+        if (outcome == Outcome.SideA) return (sideAPool * 1e18) / total;
+        if (outcome == Outcome.Draw) return (drawPool * 1e18) / total;
+        return (sideBPool * 1e18) / total;
+    }
 
-    /**
-     * @notice Buy YES shares. Caller must:
-     *   1. approve this contract to spend `amount` SkyUSDT
-     *   2. send msg.value >= calcEthFee(amount) ETH as the platform fee
-     */
-    function buyYes(uint256 amount) external payable beforeEnd {
+    function yesPrice() external view returns (uint256) {
+        uint256 total = totalPool();
+        if (total == 0) return 5e17;
+        return (sideAPool * 1e18) / total;
+    }
+
+    function noPool() external view returns (uint256) {
+        return sideBPool;
+    }
+
+    function yesPool() external view returns (uint256) {
+        return sideAPool;
+    }
+
+    function result() external view returns (bool) {
+        return winningOutcome == Outcome.SideA;
+    }
+
+    function buyYes(uint256 amount) external beforeEnd {
+        _placeBet(Outcome.SideA, amount);
+    }
+
+    function buyNo(uint256 amount) external beforeEnd {
+        _placeBet(Outcome.SideB, amount);
+    }
+
+    function buyDraw(uint256 amount) external beforeEnd {
+        _placeBet(Outcome.Draw, amount);
+    }
+
+    function buyOutcome(Outcome outcome, uint256 amount) external beforeEnd {
+        _placeBet(outcome, amount);
+    }
+
+    function _placeBet(Outcome outcome, uint256 amount) internal {
         require(amount > 0, "Amount must be > 0");
-        uint256 fee = calcEthFee(amount);
-        require(msg.value >= fee, "Insufficient ETH fee");
+        require(token.transferFrom(msg.sender, address(this), amount), "TransferFrom failed");
 
-        // Refund any excess ETH sent
-        if (msg.value > fee) {
-            payable(msg.sender).transfer(msg.value - fee);
+        if (outcome == Outcome.SideA) {
+            sideABets[msg.sender] += amount;
+            sideAPool += amount;
+        } else if (outcome == Outcome.Draw) {
+            drawBets[msg.sender] += amount;
+            drawPool += amount;
+        } else {
+            sideBBets[msg.sender] += amount;
+            sideBPool += amount;
         }
-        // Forward fee to dev wallet
-        payable(feeWallet).transfer(fee);
 
-        token.transferFrom(msg.sender, address(this), amount);
-        yesBets[msg.sender] += amount;
-        yesPool             += amount;
-        emit BetPlaced(msg.sender, true, amount, fee);
+        emit BetPlaced(msg.sender, outcome, amount, 0);
     }
 
-    /**
-     * @notice Buy NO shares. Caller must:
-     *   1. approve this contract to spend `amount` SkyUSDT
-     *   2. send msg.value >= calcEthFee(amount) ETH as the platform fee
-     */
-    function buyNo(uint256 amount) external payable beforeEnd {
-        require(amount > 0, "Amount must be > 0");
-        uint256 fee = calcEthFee(amount);
-        require(msg.value >= fee, "Insufficient ETH fee");
-
-        if (msg.value > fee) {
-            payable(msg.sender).transfer(msg.value - fee);
-        }
-        payable(feeWallet).transfer(fee);
-
-        token.transferFrom(msg.sender, address(this), amount);
-        noBets[msg.sender] += amount;
-        noPool             += amount;
-        emit BetPlaced(msg.sender, false, amount, fee);
-    }
-
-    // ── Resolution ────────────────────────────────────────────────────────
-
-    /**
-     * @notice Resolve the market using the oracle price. Anyone can call after endTime.
-     */
     function resolve() external afterEnd {
         require(!resolved, "Already resolved");
         uint256 price = oracle.getPrice();
-        result = price >= strikePrice;  // YES wins if price >= strikePrice
+        winningOutcome = price >= strikePrice ? Outcome.SideA : Outcome.SideB;
         settlementPrice = price;
         resolved = true;
-        emit MarketResolved(result, price);
+        emit MarketResolved(winningOutcome, price);
     }
 
-    /**
-     * @notice EXCLUSIVE FOR ZERO-GAS PM2 SIMULATION:
-     *         Resolves the market using a specific price injected by the PM2 bot 
-     *         directly from the Binance API, perfectly matching the frontend chart.
-     *         Only callable by the Factory (Owner).
-     */
     function resolveWithCustomPrice(uint256 price) external afterEnd onlyOwner {
         require(!resolved, "Already resolved");
-        result = price >= strikePrice; 
+        winningOutcome = price >= strikePrice ? Outcome.SideA : Outcome.SideB;
         settlementPrice = price;
         resolved = true;
-        emit MarketResolved(result, price);
+        emit MarketResolved(winningOutcome, price);
     }
 
-    // ── Claim ─────────────────────────────────────────────────────────────
+    function resolveWithOutcome(Outcome outcome, uint256 settlementValue) external afterEnd onlyOwner {
+        require(!resolved, "Already resolved");
+        winningOutcome = outcome;
+        settlementPrice = settlementValue;
+        resolved = true;
+        emit MarketResolved(outcome, settlementValue);
+    }
 
-    /**
-     * @notice Winners claim their full proportional share. No fee deducted — fee was paid upfront.
-     */
     function claim() external {
         require(resolved, "Market: not resolved yet");
         require(!claimed[msg.sender], "Already claimed");
 
-        uint256 userBet = result ? yesBets[msg.sender] : noBets[msg.sender];
+        uint256 userBet = _userBetForOutcome(msg.sender, winningOutcome);
         require(userBet > 0, "No winning bet");
 
+        uint256 winPool = _poolForOutcome(winningOutcome);
+        require(winPool > 0, "No winning pool");
+
         claimed[msg.sender] = true;
+        uint256 totalPayout = (userBet * totalPool()) / winPool;
+        
+        uint256 fee = (totalPayout * 10) / 100; // 10% fee
+        uint256 userPayout = totalPayout - fee;
 
-        uint256 winPool = result ? yesPool : noPool;
-        uint256 total   = yesPool + noPool;
-
-        // Full proportional payout — no fee deduction
-        uint256 payout = (userBet * total) / winPool;
-
-        token.transfer(msg.sender, payout);
-        emit Claimed(msg.sender, payout);
+        if (fee > 0) {
+            require(token.transfer(feeWallet, fee), "Fee transfer failed");
+        }
+        require(token.transfer(msg.sender, userPayout), "Payout transfer failed");
+        emit Claimed(msg.sender, userPayout);
     }
 
-    // ── Views ─────────────────────────────────────────────────────────────
+    function _userBetForOutcome(address user, Outcome outcome) internal view returns (uint256) {
+        if (outcome == Outcome.SideA) return sideABets[user];
+        if (outcome == Outcome.Draw) return drawBets[user];
+        return sideBBets[user];
+    }
+
+    function _poolForOutcome(Outcome outcome) internal view returns (uint256) {
+        if (outcome == Outcome.SideA) return sideAPool;
+        if (outcome == Outcome.Draw) return drawPool;
+        return sideBPool;
+    }
 
     function getUserPosition(address user) external view returns (
-        uint256 _yesBet,
-        uint256 _noBet,
-        bool    _claimed
+        uint256 _sideABet,
+        uint256 _drawBet,
+        uint256 _sideBBet,
+        bool _claimed
     ) {
-        return (yesBets[user], noBets[user], claimed[user]);
+        return (sideABets[user], drawBets[user], sideBBets[user], claimed[user]);
     }
 }

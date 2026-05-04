@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -64,7 +64,7 @@ export default function FaucetPage() {
                         <div className={styles.iconWrapper}>S</div>
                         <h2 className={styles.title}>{TOKEN_SYMBOL} Faucet</h2>
                         <p className={styles.description}>
-                            Claim your daily allowance of testnet {TOKEN_SYMBOL} to participate in Sky Predict markets on Seismic Testnet.
+                            Claim your daily allowance of testnet {TOKEN_SYMBOL} to participate in Sky Predict markets on Ritual Network.
                         </p>
 
                         <div className={styles.usdlAmount}>1000</div>

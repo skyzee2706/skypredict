@@ -1,4 +1,4 @@
-﻿import { Abi } from 'viem';
+import { Abi } from 'viem';
 import { writeContract, switchChain } from '@wagmi/core';
 import { seismicTestnet } from './seismicChain';
 import { wagmiConfig } from './wagmiConfig';
@@ -6,8 +6,8 @@ import MarketFactoryArtifact from '../contracts/MarketFactory.json';
 import PredictionMarketArtifact from '../contracts/PredictionMarket.json';
 import { FACTORY_ADDRESS } from '../constants';
 
-const FACTORY_ABI = MarketFactoryArtifact as Abi;
-const MARKET_ABI = PredictionMarketArtifact as Abi;
+const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
+const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
 
 function isFactoryConfigured() {
   const isZero = FACTORY_ADDRESS === '0x0000000000000000000000000000000000000000';

@@ -1,0 +1,14 @@
+{
+  "network": "ritual",
+  "chainId": 1979,
+  "rpcUrl": "https://rpc.ritualfoundation.org",
+  "explorerUrl": "https://explorer.ritualfoundation.org",
+  "owner": "0x0000069F157d774273D95b0909D41bb220A4dC7d",
+  "token": "0xe26a168EcDc38b14cbE80cf0F2D02161C63B6cEF",
+  "skyUsd": "0xe26a168EcDc38b14cbE80cf0F2D02161C63B6cEF",
+  "usdl": "0xe26a168EcDc38b14cbE80cf0F2D02161C63B6cEF",
+  "btcOracle": "0x32AbF4a1613A057b2b510209576C7682892D743C",
+  "ethOracle": "0x4186a91728E65F3D1167Ec408a73CD21BC77a0C5",
+  "factory": "0xCCC9B7eC20fA8e017273518e7D5A5b361AA3D55F",
+  "timestamp": "2026-05-04T12:50:49.331Z"
+}
