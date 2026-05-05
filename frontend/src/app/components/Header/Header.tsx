@@ -14,8 +14,8 @@ import { TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER, TOKEN_SYMBOL } from '../.
 import { dripUsdl } from '../../../lib/onchain/writes';
 
 interface HeaderProps {
-    onNavigate: (page: 'landing' | 'markets' | 'leaderboard' | 'faucet') => void;
-    currentPage: 'landing' | 'markets' | 'leaderboard' | 'faucet';
+    onNavigate: (page: 'landing' | 'markets' | 'leaderboard' | 'portfolio' | 'faucet') => void;
+    currentPage: 'landing' | 'markets' | 'leaderboard' | 'portfolio' | 'faucet';
 }
 
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
@@ -159,6 +159,12 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                         onClick={() => onNavigate('leaderboard')}
                     >
                         Leaderboard
+                    </span>
+                    <span
+                        className={`${styles.navItem} ${currentPage === 'portfolio' ? styles.active : ''}`}
+                        onClick={() => onNavigate('portfolio')}
+                    >
+                        Portfolio
                     </span>
                 </nav>
             </div>

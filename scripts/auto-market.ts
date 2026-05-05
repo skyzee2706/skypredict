@@ -49,15 +49,15 @@ provider.getNetwork().then(network => {
 }).catch(err => console.error('[DIAGNOSTICS] Failed to get network:', err.message));
 
 async function buildManualTx(to: string, data: string, gasLimit: bigint, value?: bigint): Promise<ethers.TransactionRequest> {
-  const feeData = await provider.getFeeData();
-  const tx: ethers.TransactionRequest = { to, data, gasLimit };
+  const tx: ethers.TransactionRequest = {
+    to,
+    data,
+    gasLimit,
+    // Ritual RPC can return an invalid/overflowing gas estimate via feeData.
+    // Use a deterministic legacy gas price for scheduler txs instead.
+    gasPrice: ethers.parseUnits(process.env.RITUAL_GAS_PRICE_GWEI || '0.02', 'gwei')
+  };
   if (value !== undefined) tx.value = value;
-  if (feeData.maxFeePerGas && feeData.maxPriorityFeePerGas) {
-    tx.maxFeePerGas = feeData.maxFeePerGas;
-    tx.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas;
-  } else if (feeData.gasPrice) {
-    tx.gasPrice = feeData.gasPrice;
-  }
   return tx;
 }
 
@@ -220,6 +220,7 @@ const DOMESTIC_COMPETITIONS = new Set(Object.keys(TOP_FIVE_TEAMS_BY_COMPETITION)
 const UCL_COMPETITIONS = new Set(['CL', 'UCL']);
 const SPORTS_DISCOVERY_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const SPORTS_RESOLVE_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+const CRYPTO_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 let lastSportsDiscoveryAt = 0;
 let cachedSportsFixtures: TrackedFixture[] = [];
 
@@ -401,8 +402,10 @@ async function resolveMarkets() {
       }
     }
 
+    // Crypto markets are daily-only. Every sweep resolves expired daily markets first;
+    // once a daily market is resolved and no active market exists for the next
+    // midnight window, the scheduler deploys a fresh daily market.
     const types = [
-      { id: 'H' as const, label: 'Hourly', getET: nextHourUTC, buffer: 600 },
       { id: 'D' as const, label: 'Daily', getET: nextMidnightUTC, buffer: 18000 }
     ];
 
@@ -413,9 +416,7 @@ async function resolveMarkets() {
         try {
           const liveMedian = await getLiveMedianPrice(ticker);
           const formattedPrice = liveMedian.toLocaleString('en-US', { minimumFractionDigits: liveMedian < 1 ? 4 : 2, maximumFractionDigits: liveMedian < 1 ? 4 : 2 });
-          const question = t.id === 'H'
-            ? `Will ${ticker}/USD be above $${formattedPrice} at ${formatHour(targetET)}?`
-            : `Will ${ticker}/USD be above $${formattedPrice} by midnight ${formatDate(targetET)}?`;
+          const question = `Will ${ticker}/USD be above $${formattedPrice} by midnight ${formatDate(targetET)}?`;
           console.log(`Create ${ticker} ${t.label}: ${question}`);
           await sendCreateMarketTx(factory, question, toScaledPrice(liveMedian), targetET, targetET - t.buffer);
         } catch (e: any) {
@@ -433,10 +434,10 @@ async function resolveMarkets() {
 }
 
 async function main() {
-  console.log('Sky Predict Bot Starting on Ritual (Crypto + Sports Football)...');
+  console.log('Sky Predict Bot Starting on Ritual (Daily Crypto + Sports Football)...');
   clearStaleLock();
   await resolveMarkets();
-  setInterval(resolveMarkets, SPORTS_RESOLVE_SCAN_INTERVAL_MS);
+  setInterval(resolveMarkets, CRYPTO_SWEEP_INTERVAL_MS);
 }
 
 main().catch(console.error);

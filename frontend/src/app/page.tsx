@@ -15,6 +15,7 @@ export default function Home() {
         if (page === 'markets') router.push('/markets');
         else if (page === 'faucet') router.push('/faucet');
         else if (page === 'leaderboard') router.push('/leaderboard');
+        else if (page === 'portfolio') router.push('/portfolio');
         else if (page === 'landing') router.push('/');
       }} currentPage="landing" />
       <div className={styles.mainContainer}>

@@ -107,6 +107,9 @@ export default function MarketsPage() {
         <>
             <Header onNavigate={(page) => {
                 if (page === 'landing') router.push('/');
+                else if (page === 'markets') router.push('/markets');
+                else if (page === 'leaderboard') router.push('/leaderboard');
+                else if (page === 'portfolio') router.push('/portfolio');
                 else if (page === 'faucet') router.push('/faucet');
             }} currentPage="markets" />
 
@@ -126,7 +129,7 @@ export default function MarketsPage() {
                                 {activeMarketState} Markets
                             </h2>
                             <div className={styles.stateFilters}>
-                                {(['ACTIVE', 'RESOLVING', 'RESOLVED', 'UNDETERMINED'] as MarketState[]).map((state) => (
+                                {(['ACTIVE', 'RESOLVING'] as MarketState[]).map((state) => (
                                     <button
                                         key={state}
                                         className={`${styles.stateFilter} ${
@@ -134,13 +137,7 @@ export default function MarketsPage() {
                                         }`}
                                         onClick={() => setActiveMarketState(state)}
                                     >
-                                        {state === 'ACTIVE'
-                                            ? 'Active'
-                                            : state === 'RESOLVING'
-                                                ? 'Resolving'
-                                                : state === 'RESOLVED'
-                                                    ? 'Finalized'
-                                                    : 'Undetermined'}
+                                        {state === 'ACTIVE' ? 'Active' : 'Resolving'}
                                     </button>
                                 ))}
                             </div>
@@ -157,8 +154,6 @@ export default function MarketsPage() {
                                     <div className={styles.emptyState}>
                                         {activeMarketState === 'ACTIVE' && 'No active markets'}
                                         {activeMarketState === 'RESOLVING' && 'No resolving markets'}
-                                        {activeMarketState === 'RESOLVED' && 'No finalized markets'}
-                                        {activeMarketState === 'UNDETERMINED' && 'No undetermined markets'}
                                     </div>
                                 ) : (
                                     filteredMarkets.map((market) => (

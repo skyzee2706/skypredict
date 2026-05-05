@@ -217,12 +217,17 @@ export async function fetchMarketsByStatus(status: MarketState): Promise<MarketD
       }
     })
   );
-
   const cleaned = markets.filter((m): m is MarketData => m !== null);
-  if (status === 'UNDETERMINED') return [];
 
   return cleaned
-    .filter((m) => m.state === status)
+    .filter((m) => {
+      if (status === 'UNDETERMINED') {
+        const deadline = Number(m.deadline);
+        const now = Math.floor(Date.now() / 1000);
+        return m.state !== 'RESOLVED' && deadline > 0 && deadline < now;
+      }
+      return m.state === status;
+    })
     .sort((a, b) => Number(a.deadline) - Number(b.deadline));
 }
 
