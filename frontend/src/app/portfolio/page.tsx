@@ -5,12 +5,23 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import Header from "../components/Header/Header";
 import styles from "../page.module.css";
-import { fetchAllMarkets } from "@/lib/onchain/reads";
-import { claimRewards, getUserBets, calculateUserWinnings } from "@/lib/onchain/writes";
-import { getUserMarketStatus, MarketData } from "@/data/markets";
-import { useLeaderboard } from "@/hooks/useLeaderboard";
+import { claimRewards } from "@/lib/onchain/writes";
+import { MarketData } from "@/data/markets";
 import { SKYUSD_MULTIPLIER } from "@/lib/constants";
+import { useBatchedMarkets, useBatchedUserPositions, useFactoryMarkets } from "@/hooks/useMarketBatches";
 import { useToast } from "../providers/ToastProvider";
+
+type CachedPortfolioResponse = {
+    marketAddresses: `0x${string}`[];
+    activity: Array<{
+        txHash: string;
+        market: `0x${string}`;
+        type: 'BET' | 'CLAIM';
+        amount: string;
+        blockNumber: string;
+    }>;
+    updatedAt: number;
+};
 
 type PortfolioPosition = {
     market: MarketData;
@@ -28,16 +39,6 @@ function formatAmount(value: number) {
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function formatBigSky(value: bigint) {
-    const negative = value < 0n;
-    const abs = negative ? -value : value;
-    const formatted = (Number(abs) / SKYUSD_MULTIPLIER).toLocaleString(undefined, {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-    });
-    return `${negative ? "-" : "+"}${formatted}`;
-}
-
 function shortAddress(addr: string) {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
@@ -46,72 +47,107 @@ export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const { showToast } = useToast();
-    const { entries } = useLeaderboard();
+    const { addresses } = useFactoryMarkets();
+    const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
+    const liveAddresses = useMemo(() => {
+        const cached = cachedPortfolio?.marketAddresses ?? [];
+        return cached.length > 0 ? cached : addresses;
+    }, [addresses, cachedPortfolio]);
+    const { markets: batchedMarkets, isLoading: marketsLoading } = useBatchedMarkets(liveAddresses);
+    const { positions: batchedPositions, isLoading: positionsLoading } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
     const [positions, setPositions] = useState<PortfolioPosition[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
     const [claiming, setClaiming] = useState<string | null>(null);
 
-    const userEntry = useMemo(() => {
-        if (!address) return undefined;
-        return entries.find((entry) => entry.address.toLowerCase() === address.toLowerCase());
-    }, [address, entries]);
+    const userStats = useMemo(() => {
+        const volume = positions.reduce((sum, position) => sum + position.total, 0);
+        const claimable = positions.reduce((sum, position) => sum + (position.canClaim ? position.potentialWinnings : 0), 0);
+        return {
+            volume,
+            pnl: claimable - volume,
+            historyCount: cachedPortfolio?.activity.length || positions.length,
+        };
+    }, [cachedPortfolio, positions]);
 
-    const loadPortfolio = React.useCallback(async () => {
+    useEffect(() => {
+        if (!address) {
+            setCachedPortfolio(null);
+            return;
+        }
+
+        let cancelled = false;
+        async function loadCachedPortfolio() {
+            try {
+                const response = await fetch(`/api/portfolio/${address}`);
+                if (!response.ok) return;
+                const data = await response.json() as CachedPortfolioResponse;
+                if (!cancelled) setCachedPortfolio(data);
+            } catch (error) {
+                console.error('Portfolio cache fetch failed:', error);
+            }
+        }
+
+        loadCachedPortfolio();
+        const interval = setInterval(loadCachedPortfolio, 60_000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [address]);
+
+    useEffect(() => {
         if (!address) {
             setPositions([]);
             return;
         }
 
-        setIsLoading(true);
-        try {
-            const markets = await fetchAllMarkets(["ACTIVE", "RESOLVING", "RESOLVED", "UNDETERMINED"]);
-            const rows = await Promise.all(markets.map(async (market) => {
-                try {
-                    const userBets = await getUserBets(market.contractId as `0x${string}`, address as `0x${string}`);
-                    const total = userBets.onSideA + userBets.onDraw + userBets.onSideB;
-                    if (total <= 0) return null;
+        if (batchedMarkets.length === 0 || batchedPositions.length === 0) return;
 
-                    const status = await getUserMarketStatus(market.contractId, address, market);
-                    let potentialWinnings = status?.potentialWinnings || 0;
+        const marketByAddress = new Map(batchedMarkets.map((market) => [market.contractId.toLowerCase(), market]));
+        const rows = batchedPositions
+            .map((position) => {
+                const market = marketByAddress.get(position.marketAddress.toLowerCase());
+                if (!market) return null;
 
-                    if (!potentialWinnings && market.state === "RESOLVED") {
-                        const winnings = await calculateUserWinnings(market.contractId as `0x${string}`, address as `0x${string}`);
-                        if (market.resolvedOutcome === market.sideAName) potentialWinnings = winnings.ifSideAWins;
-                        if (market.resolvedOutcome === market.drawName) potentialWinnings = winnings.ifDrawWins;
-                        if (market.resolvedOutcome === market.sideBName) potentialWinnings = winnings.ifSideBWins;
-                    }
+                const sideAName = market.sideAName || "YES";
+                const drawName = market.drawName || "DRAW";
+                const sideBName = market.sideBName || "NO";
+                let userWon = false;
+                let canClaim = false;
 
-                    return {
-                        market,
-                        sideA: userBets.onSideA,
-                        draw: userBets.onDraw,
-                        sideB: userBets.onSideB,
-                        total,
-                        claimed: Boolean(userBets.claimed),
-                        canClaim: Boolean(status?.canClaim && !userBets.claimed),
-                        userWon: Boolean(status?.userWon),
-                        potentialWinnings,
-                    } as PortfolioPosition;
-                } catch (error) {
-                    console.error("Portfolio market read failed:", market.contractId, error);
-                    return null;
+                if (market.state === "UNDETERMINED") {
+                    userWon = true;
+                    canClaim = !position.claimed;
+                } else if (market.state === "RESOLVED") {
+                    userWon =
+                        (market.resolvedOutcome === sideAName && position.onSideA > 0) ||
+                        (market.resolvedOutcome === drawName && position.onDraw > 0) ||
+                        (market.resolvedOutcome === sideBName && position.onSideB > 0);
+                    canClaim = userWon && !position.claimed;
                 }
-            }));
 
-            setPositions(rows.filter((row): row is PortfolioPosition => row !== null));
-        } catch (error) {
-            console.error("Portfolio load failed:", error);
-            showToast("Failed to load portfolio. Please try again.", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    }, [address, showToast]);
+                return {
+                    market,
+                    sideA: position.onSideA,
+                    draw: position.onDraw,
+                    sideB: position.onSideB,
+                    total: position.total,
+                    claimed: position.claimed,
+                    canClaim,
+                    userWon,
+                    potentialWinnings: canClaim ? position.total : 0,
+                } as PortfolioPosition;
+            })
+            .filter((row): row is PortfolioPosition => row !== null);
 
-    useEffect(() => {
-        loadPortfolio();
-        const interval = setInterval(loadPortfolio, 30_000);
-        return () => clearInterval(interval);
-    }, [loadPortfolio]);
+        setPositions(rows);
+    }, [address, batchedMarkets, batchedPositions]);
+
+    const loadPortfolio = React.useCallback(async () => {
+        // Wagmi hooks refetch in the background automatically; this keeps the
+        // button API stable without reintroducing direct per-market RPC loops.
+    }, []);
+
+    const isLoading = isConnected && positions.length === 0 && (marketsLoading || positionsLoading);
 
     const handleClaim = async (position: PortfolioPosition) => {
         setClaiming(position.market.contractId);
@@ -134,7 +170,6 @@ export default function PortfolioPage() {
             <Header
                 onNavigate={(page) => {
                     if (page === "markets") router.push("/markets");
-                    else if (page === "leaderboard") router.push("/leaderboard");
                     else if (page === "portfolio") router.push("/portfolio");
                     else if (page === "faucet") router.push("/faucet");
                     else router.push("/");
@@ -161,19 +196,19 @@ export default function PortfolioPage() {
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px", marginBottom: "24px" }}>
                         <div style={{ padding: "18px", borderRadius: "20px", border: "1px solid rgba(34,197,94,0.28)", background: "linear-gradient(135deg,rgba(34,197,94,0.12),rgba(255,255,255,0.04))" }}>
                             <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>PNL</p>
-                            <p style={{ color: userEntry && userEntry.pnl < 0n ? "#fb7185" : "#22c55e", fontSize: "28px", fontWeight: 950, marginTop: "8px", fontFamily: "monospace" }}>
-                                {userEntry ? formatBigSky(userEntry.pnl) : "+0.00"}
+                            <p style={{ color: userStats.pnl < 0 ? "#fb7185" : "#22c55e", fontSize: "28px", fontWeight: 950, marginTop: "8px", fontFamily: "monospace" }}>
+                                {`${userStats.pnl < 0 ? "-" : "+"}${formatAmount(Math.abs(userStats.pnl))}`}
                             </p>
                         </div>
                         <div style={{ padding: "18px", borderRadius: "20px", border: "1px solid rgba(99,102,241,0.28)", background: "linear-gradient(135deg,rgba(99,102,241,0.14),rgba(255,255,255,0.04))" }}>
                             <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>Volume</p>
                             <p style={{ color: "var(--text-primary)", fontSize: "28px", fontWeight: 950, marginTop: "8px", fontFamily: "monospace" }}>
-                                {userEntry ? formatAmount(Number(userEntry.volume) / SKYUSD_MULTIPLIER) : "0.00"}
+                                {formatAmount(userStats.volume)}
                             </p>
                         </div>
                         <div style={{ padding: "18px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-card)" }}>
                             <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>Trading History</p>
-                            <p style={{ color: "var(--text-primary)", fontSize: "28px", fontWeight: 950, marginTop: "8px" }}>{positions.length}</p>
+                            <p style={{ color: "var(--text-primary)", fontSize: "28px", fontWeight: 950, marginTop: "8px" }}>{userStats.historyCount}</p>
                         </div>
                     </div>
 

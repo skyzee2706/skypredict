@@ -2,9 +2,8 @@
 
 import React from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { fetchAllMarkets } from '../../../lib/onchain/reads';
 import type { MarketData } from '../../../data/markets';
+import { useBatchedMarkets, useFactoryMarkets } from '../../../hooks/useMarketBatches';
 import styles from './LandingView.module.css';
 
 /* ── SVG Icon Components (consistent across all devices) ── */
@@ -58,19 +57,24 @@ function formatVol(v: number): string {
 const LandingView: React.FC = () => {
     const router = useRouter();
 
-    const { data: allMarkets } = useQuery({
-        queryKey: ['landing_all_markets'],
-        queryFn: () => fetchAllMarkets(['ACTIVE', 'RESOLVING']),
-        refetchInterval: 60_000,
-    });
+    const { addresses } = useFactoryMarkets();
+    const { markets: batchedMarkets } = useBatchedMarkets(addresses);
+    const [allMarkets, setAllMarkets] = React.useState<MarketData[]>([]);
 
-    const activeMarkets = allMarkets?.filter(m => m.state === 'ACTIVE') ?? [];
+    React.useEffect(() => {
+        if (batchedMarkets.length > 0) {
+            setAllMarkets(batchedMarkets);
+        }
+    }, [batchedMarkets]);
+
+    const activeMarkets = allMarkets.filter(m => m.state === 'ACTIVE');
     const activeMarketsCount = activeMarkets.length;
     const sportCount = activeMarkets.filter(m => m.type === 'sport').length;
     const cryptoCount = activeMarkets.filter(m => m.type === 'crypto').length;
 
-    // Trending: top 3 by volume per category
-    const sorted = [...(allMarkets ?? [])].sort((a, b) => b.volume - a.volume);
+    // Trending: top 3 by volume per category. Reuses cached batched data so the
+    // landing page stays seamless like the Markets page.
+    const sorted = [...allMarkets].sort((a, b) => b.volume - a.volume);
     const trendingCrypto = sorted.filter(m => m.type === 'crypto').slice(0, 3);
     const trendingSport = sorted.filter(m => m.type === 'sport').slice(0, 3);
 
@@ -261,7 +265,7 @@ const LandingView: React.FC = () => {
                             <div className={styles.footerColTitle}>Product</div>
                             <a href="/markets" className={styles.footerLink}>Markets</a>
                             <a href="/faucet" className={styles.footerLink}>Faucet</a>
-                            <a href="/leaderboard" className={styles.footerLink}>Leaderboard</a>
+                            <a href="/portfolio" className={styles.footerLink}>Portfolio</a>
                         </div>
                         <div className={styles.footerLinkCol}>
                             <div className={styles.footerColTitle}>Resources</div>

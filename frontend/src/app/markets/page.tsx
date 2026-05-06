@@ -8,7 +8,7 @@ import MarketCard from '../components/MarketCard/MarketCard';
 import MarketDetailPanel from '../components/MarketDetailPanel/MarketDetailPanel';
 import styles from '../page.module.css';
 import { MarketState, MarketData } from '../../data/markets';
-import { fetchMarketsByStatus } from '../../lib/onchain/reads';
+import { useFactoryMarkets, useBatchedMarkets } from '../../hooks/useMarketBatches';
 import { useToast } from '../providers/ToastProvider';
 
 export default function MarketsPage() {
@@ -19,8 +19,15 @@ export default function MarketsPage() {
     const [activeCategory, setActiveCategory] = useState('All'); // UI category, not used for fetching
     const [activeMarketState, setActiveMarketState] = useState<MarketState>('ACTIVE');
     const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-    const [currentMarkets, setCurrentMarkets] = useState<MarketData[]>([]);
-    const [isLoading, setIsLoading] = useState(false);
+    const { addresses, error: factoryError } = useFactoryMarkets();
+    const { markets: batchedMarkets, isLoading: isBatchLoading, error: batchError } = useBatchedMarkets(addresses);
+    const [allMarkets, setAllMarkets] = useState<MarketData[]>([]);
+
+    useEffect(() => {
+        if (batchedMarkets.length > 0) {
+            setAllMarkets(batchedMarkets);
+        }
+    }, [batchedMarkets]);
 
     useEffect(() => {
         const id = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
@@ -29,38 +36,29 @@ export default function MarketsPage() {
 
     const handleMarketClick = (id: string) => {
         setSelectedMarketId(id);
-        // Find and store the market data from current markets
-        const market = currentMarkets.find(m => m.id === id);
+        // Find and store the market data from all markets
+        const market = allMarkets.find(m => m.id === id);
         setSelectedMarketData(market || null);
     };
 
-    const loadMarketsForCurrentState = React.useCallback(async () => {
-        setIsLoading(true);
-        try {
-            const markets = await fetchMarketsByStatus(activeMarketState);
-            setCurrentMarkets(markets);
-        } catch (error) {
-            console.error(`Failed to load ${activeMarketState} markets:`, error);
-            showToast(`Failed to load ${activeMarketState.toLowerCase()} markets. Please try again.`, 'error');
-            setCurrentMarkets([]);
-        } finally {
-            setIsLoading(false);
+    useEffect(() => {
+        const error = factoryError || batchError;
+        if (error && allMarkets.length === 0) {
+            console.error('Failed to load markets:', error);
+            showToast('Failed to load markets. Please try again.', 'error');
         }
-    }, [activeMarketState, showToast]);
+    }, [factoryError, batchError, allMarkets.length, showToast]);
 
-    // Always fetch fresh data when state changes
-    useEffect(() => {
-        loadMarketsForCurrentState();
-    }, [loadMarketsForCurrentState]);
-
-    // Periodically refresh markets data every 30 seconds
-    useEffect(() => {
-        const interval = setInterval(() => {
-            loadMarketsForCurrentState();
-        }, 30000);
-
-        return () => clearInterval(interval);
-    }, [loadMarketsForCurrentState]);
+    // Derived state for currently filtered markets
+    const currentMarkets = React.useMemo(() => {
+        return allMarkets.filter((m: MarketData) => {
+            if (activeMarketState === 'UNDETERMINED') {
+                const deadline = Number(m.deadline);
+                return m.state !== 'RESOLVED' && deadline > 0 && deadline < now;
+            }
+            return m.state === activeMarketState;
+        });
+    }, [allMarkets, activeMarketState, now]);
 
     // Find selected market in current markets or fall back to stored data
     const selectedMarket = React.useMemo((): MarketData | null => {
@@ -100,7 +98,7 @@ export default function MarketsPage() {
             return aTime - bTime;
         });
 
-    const isGridLoading = isLoading;
+    const isGridLoading = allMarkets.length === 0 && isBatchLoading;
     const isEmpty = !isGridLoading && filteredMarkets.length === 0;
 
     return (
@@ -108,7 +106,6 @@ export default function MarketsPage() {
             <Header onNavigate={(page) => {
                 if (page === 'landing') router.push('/');
                 else if (page === 'markets') router.push('/markets');
-                else if (page === 'leaderboard') router.push('/leaderboard');
                 else if (page === 'portfolio') router.push('/portfolio');
                 else if (page === 'faucet') router.push('/faucet');
             }} currentPage="markets" />

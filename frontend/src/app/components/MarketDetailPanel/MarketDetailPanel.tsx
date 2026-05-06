@@ -11,6 +11,7 @@ import { useToast } from '../../providers/ToastProvider';
 import { formatUsdlAmount, formatAddress, formatResolutionDate, formatVolume } from '../../../utils/formatters';
 import CopyIcon from '../Shared/CopyIcon';
 import ResolutionRules from '../Shared/ResolutionRules';
+import { useLiveScore } from '../../../hooks/useLiveScore';
 
 interface MarketDetailPanelProps {
     onClose: () => void;
@@ -70,6 +71,10 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
 
         fetchUserStatus();
     }, [market, isConnected, walletAddress]);
+
+    // Live score hook for sports markets
+    const isSport = market?.category === 'SPORTS';
+    const { liveScore } = useLiveScore(isSport ? market?.sideAName : undefined, isSport ? market?.sideBName : undefined);
 
     const finalPriceText = market?.deadlinePrice
         ? `${market.priceSymbol ?? ''}${market.deadlinePrice.toLocaleString()}`
@@ -331,7 +336,36 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
                     <>
                         <TradeBox probability={probability} market={market} />
                         {market && <UserBetDisplay market={market} variant="compact" />}
-                        <ChartSection probability={probability} type={type} identifier={identifier} market={market} />
+                        {isSport ? (
+                            <div className={styles.liveScoreboardDetail} style={{ margin: '16px 0', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '24px', borderRadius: '24px' }}>
+                                <div className={styles.liveScoreboardMeta}>
+                                    <span className={styles.liveScoreboardStatus}>
+                                        {liveScore && (liveScore.status === 'IN_PLAY' || liveScore.status === 'PAUSED') ? <span className={styles.liveBlinker}></span> : null} 
+                                        {liveScore?.status === 'TIMED' || liveScore?.status === 'SCHEDULED' 
+                                            ? 'Belum mulai' 
+                                            : (liveScore?.elapsed ? `${liveScore.elapsed}` : (liveScore?.status || 'Loading...'))}
+                                    </span>
+                                    {liveScore?.utcDate && (liveScore.status === 'TIMED' || liveScore.status === 'SCHEDULED') && (
+                                        <span className={styles.liveScoreboardLeague}>
+                                            Kickoff: {new Date(liveScore.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className={styles.liveScoreboardScoreRow}>
+                                    <div className={styles.liveScoreboardTeam}>
+                                        <span className={styles.liveScoreboardTeamName}>{liveScore?.homeTeam || market?.sideAName || 'Home'}</span>
+                                        <span className={styles.liveScoreboardGoals}>{liveScore?.homeGoals ?? '-'}</span>
+                                    </div>
+                                    <span className={styles.liveScoreboardSeparator}>-</span>
+                                    <div className={styles.liveScoreboardTeam}>
+                                        <span className={styles.liveScoreboardGoals}>{liveScore?.awayGoals ?? '-'}</span>
+                                        <span className={styles.liveScoreboardTeamName}>{liveScore?.awayTeam || market?.sideBName || 'Away'}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <ChartSection probability={probability} type={type} identifier={identifier} market={market} />
+                        )}
                         {market && <ResolutionRules market={market} />}
                     </>
                 )}

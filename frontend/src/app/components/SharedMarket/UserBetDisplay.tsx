@@ -15,8 +15,11 @@ interface UserBetDisplayProps {
 interface UserBetData {
     onSideA: number;
     onSideB: number;
+    onDraw?: number;
     ifSideAWins: number;
     ifSideBWins: number;
+    ifDrawWins?: number;
+    claimed?: boolean;
 }
 
 const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full' }) => {
@@ -109,7 +112,7 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
         );
     }
 
-    if (!betData || (betData.onSideA === 0 && betData.onSideB === 0)) {
+    if (!betData || (betData.onSideA === 0 && betData.onSideB === 0 && (!betData.onDraw || betData.onDraw === 0))) {
         return (
             <div className={styles.container}>
                 <div className={styles.header}>
@@ -122,20 +125,24 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
         );
     }
 
-    const hasOnlyA = betData.onSideA > 0 && betData.onSideB === 0;
-    const hasOnlyB = betData.onSideB > 0 && betData.onSideA === 0;
-    const hasBoth = betData.onSideA > 0 && betData.onSideB > 0;
+    const hasBoth = (betData.onSideA > 0 ? 1 : 0) + (betData.onSideB > 0 ? 1 : 0) + ((betData.onDraw || 0) > 0 ? 1 : 0) > 1;
 
     // Use market data for resolution info instead of contract call
     const isResolved = market.state === 'RESOLVED' || market.state === 'UNDETERMINED';
     const isSideAWinner = market.resolvedOutcome === market.sideAName;
+    const isDrawWinner = market.resolvedOutcome === market.drawName;
+    const isSideBWinner = market.resolvedOutcome === market.sideBName;
 
     const userWonA = isResolved && isSideAWinner && betData.onSideA > 0;
-    const userWonB = isResolved && !isSideAWinner && betData.onSideB > 0;
-    const userWon = userWonA || userWonB;
+    const userWonDraw = isResolved && isDrawWinner && (betData.onDraw || 0) > 0;
+    const userWonB = isResolved && isSideBWinner && betData.onSideB > 0;
+    const userWon = userWonA || userWonDraw || userWonB;
 
-    const winningsAmount = userWonA ? betData.ifSideAWins : userWonB ? betData.ifSideBWins : 0;
-    const totalBetAmount = betData.onSideA + betData.onSideB;
+    const winningsAmount = userWonA ? betData.ifSideAWins : userWonDraw ? (betData.ifDrawWins || 0) : userWonB ? betData.ifSideBWins : 0;
+    const totalBetAmount = betData.onSideA + betData.onSideB + (betData.onDraw || 0);
+
+    // If user has claimed, mark as claimed
+    const isClaimed = betData.claimed;
 
     return (
         <div className={styles.container}>
@@ -168,6 +175,25 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
                     </div>
                 )}
 
+                {betData.onDraw && betData.onDraw > 0 ? (
+                    <div className={styles.betRow}>
+                        <div className={`${styles.positionName} ${styles.positionNameDraw}`}>{market.drawName || 'DRAW'}</div>
+                        <div className={styles.betAmountSection}>
+                            <div className={styles.betAmount}>{formatUsdlAmount(betData.onDraw)}</div>
+                            {!isResolved && (
+                                <div className={styles.discreteWinnings}>
+                                    {market.state === 'RESOLVING' ? 'Pending resolution' : `Can win ${formatUsdlAmount(betData.ifDrawWins || 0)}`}
+                                </div>
+                            )}
+                        </div>
+                        {isResolved && (
+                            <div className={`${styles.outcome} ${isDrawWinner ? styles.outcomeWin : styles.outcomeLoss}`}>
+                                {isDrawWinner ? `+${formatUsdlAmount((betData.ifDrawWins || 0) - betData.onDraw)}` : `Lost ${formatUsdlAmount(betData.onDraw)}`}
+                            </div>
+                        )}
+                    </div>
+                ) : null}
+
                 {betData.onSideB > 0 && (
                     <div className={styles.betRow}>
                         <div className={`${styles.positionName} ${styles.positionNameSideB}`}>{market.sideBName || 'NO'}</div>
@@ -180,8 +206,8 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
                             )}
                         </div>
                         {isResolved && (
-                            <div className={`${styles.outcome} ${!isSideAWinner ? styles.outcomeWin : styles.outcomeLoss}`}>
-                                {!isSideAWinner ? `+${formatUsdlAmount(betData.ifSideBWins - betData.onSideB)}` : `Lost ${formatUsdlAmount(betData.onSideB)}`}
+                            <div className={`${styles.outcome} ${isSideBWinner ? styles.outcomeWin : styles.outcomeLoss}`}>
+                                {isSideBWinner ? `+${formatUsdlAmount(betData.ifSideBWins - betData.onSideB)}` : `Lost ${formatUsdlAmount(betData.onSideB)}`}
                             </div>
                         )}
                     </div>
@@ -205,7 +231,7 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
                 </div>
             )}
 
-            {userWon && isResolved && (
+            {userWon && isResolved && !isClaimed && (
                 <button
                     className={styles.claimButton}
                     onClick={handleClaim}
@@ -214,6 +240,15 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
                     {claiming ? 'Claiming...' : market.state === 'UNDETERMINED'
                         ? `Claim Refund ${formatUsdlAmount(winningsAmount)}`
                         : `Claim Winnings ${formatUsdlAmount(winningsAmount)}`}
+                </button>
+            )}
+            
+            {userWon && isResolved && isClaimed && (
+                <button
+                    className={`${styles.claimButton} ${styles.claimedButton}`}
+                    disabled={true}
+                >
+                    Already Claimed
                 </button>
             )}
 

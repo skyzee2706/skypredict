@@ -236,6 +236,7 @@ interface TrackedFixture {
   awayGoals?: number | null;
   createdAt?: string;
   resolvedAt?: string;
+  nextCheckAt?: number;
 }
 
 type SportsState = Record<string, TrackedFixture>;
@@ -309,8 +310,10 @@ async function fetchUpcomingBigFixtures(force = false): Promise<TrackedFixture[]
 
 async function fetchMatchResult(fixture: TrackedFixture): Promise<{ status: string; homeGoals: number | null; awayGoals: number | null } | null> {
   const matchDate = dateOnly(fixture.kickoff);
-  const data = await footballApi(`/matches?dateFrom=${matchDate}&dateTo=${matchDate}`);
-  const match = (data?.matches || []).find((item: any) => Number(item.id) === fixture.fixtureId);
+  const endDate = dateOnly(fixture.kickoff + 86400); // add 24 hours to dateTo for safety
+  const data = await footballApi(`/matches?dateFrom=${matchDate}&dateTo=${endDate}`);
+  if (!data) return null; // Handle API failure gracefully
+  const match = (data.matches || []).find((item: any) => Number(item.id) === fixture.fixtureId);
   if (!match) return null;
   return {
     status: match.status,
@@ -352,16 +355,55 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
   for (const [key, tracked] of Object.entries(state)) {
     if (!tracked.marketAddress || tracked.resolvedAt) continue;
     const now = Math.floor(Date.now() / 1000);
-    if (now < tracked.kickoff + 90 * 60) continue;
+    
+    // First check is 110 minutes after kickoff, or whatever dynamic nextCheckAt is set
+    const checkTime = tracked.nextCheckAt || (tracked.kickoff + 110 * 60);
+    if (now < checkTime) continue;
+
+    console.log(`[SPORT] Checking status for ${tracked.homeTeam} vs ${tracked.awayTeam}...`);
     const result = await fetchMatchResult(tracked);
-    if (!result || result.status !== 'FINISHED' || result.homeGoals === null || result.awayGoals === null) continue;
+    
+    if (!result) {
+      console.warn(`[SPORT] API failed or match not found for ${tracked.homeTeam}. Will retry in 10 minutes.`);
+      state[key] = { ...tracked, nextCheckAt: now + 10 * 60 };
+      writeSportsState(state);
+      continue;
+    }
+
+    if (result.status !== 'FINISHED') {
+      console.log(`[SPORT] Match ${tracked.homeTeam} vs ${tracked.awayTeam} still ${result.status}. Will retry in 10 minutes.`);
+      state[key] = { ...tracked, status: result.status, nextCheckAt: now + 10 * 60 };
+      writeSportsState(state);
+      continue;
+    }
+
+    if (result.homeGoals === null || result.awayGoals === null) {
+      console.warn(`[SPORT] Match FINISHED but goals are null for ${tracked.homeTeam}. Will retry in 10 minutes.`);
+      state[key] = { ...tracked, nextCheckAt: now + 10 * 60 };
+      writeSportsState(state);
+      continue;
+    }
+
     const outcome: 0 | 1 | 2 = result.homeGoals > result.awayGoals ? 0 : result.homeGoals === result.awayGoals ? 1 : 2;
-    const market = new ethers.Contract(tracked.marketAddress, MARKET_ABI, signer);
-    if (await market.resolved()) continue;
-    console.log(`[SPORT] Resolve ${tracked.homeTeam} ${result.homeGoals}-${result.awayGoals} ${tracked.awayTeam}`);
-    await sendResolveOutcomeTx(market, outcome, BigInt(`${result.homeGoals}${result.awayGoals}`));
-    state[key] = { ...tracked, status: result.status, homeGoals: result.homeGoals, awayGoals: result.awayGoals, resolvedAt: new Date().toISOString() };
-    writeSportsState(state);
+    
+    try {
+      const market = new ethers.Contract(tracked.marketAddress, MARKET_ABI, signer);
+      if (await market.resolved()) {
+        console.log(`[SPORT] Market already resolved, removing from database...`);
+        delete state[key];
+        writeSportsState(state);
+        continue;
+      }
+
+      console.log(`[SPORT] Resolve ${tracked.homeTeam} ${result.homeGoals}-${result.awayGoals} ${tracked.awayTeam}`);
+      await sendResolveOutcomeTx(market, outcome, BigInt(`${result.homeGoals}${result.awayGoals}`));
+      
+      console.log(`[SPORT] Market resolved successfully, removing from database...`);
+      delete state[key];
+      writeSportsState(state);
+    } catch (err: any) {
+      console.error(`[SPORT] Error resolving market ${tracked.marketAddress}:`, err?.shortMessage || err?.message || err);
+    }
   }
 }
 

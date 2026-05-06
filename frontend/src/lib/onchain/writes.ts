@@ -123,18 +123,18 @@ export async function approveUsdlUnlimited(spenderAddress: `0x${string}`): Promi
   });
 }
 
-export async function dripUsdl(): Promise<void> {
+export async function dripUsdl(userAddress?: `0x${string}`): Promise<void> {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
   const account = getAccount(wagmiConfig);
-  if (!account.address) throw new Error('Wallet not connected');
+  const targetAddress = userAddress || account.address;
+  if (!targetAddress) throw new Error('Wallet not connected');
 
   await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
     functionName: 'faucet',
-    args: [account.address as `0x${string}`],
-    gas: 100000n,
+    args: [targetAddress],
   });
 }
 
@@ -152,33 +152,95 @@ export async function isLegitBet(marketAddress: `0x${string}`): Promise<boolean>
 
 export async function getUserBets(marketAddress: `0x${string}`, userAddress: `0x${string}`): Promise<{ onSideA: number; onDraw: number; onSideB: number; claimed?: boolean }> {
   const publicClient = getPublicClient();
-  const result = await publicClient.readContract({
-    address: marketAddress,
-    abi: MARKET_ABI,
-    functionName: 'getUserPosition',
-    args: [userAddress]
-  });
+  try {
+    const result = await publicClient.readContract({
+      address: marketAddress,
+      abi: MARKET_ABI,
+      functionName: 'getUserPosition',
+      args: [userAddress]
+    });
 
-  const [sideABetRaw, drawBetRaw, sideBBetRaw, claimed] = result as [bigint, bigint, bigint, boolean];
-  return {
-    onSideA: Number(sideABetRaw) / SKYUSD_MULTIPLIER,
-    onDraw: Number(drawBetRaw) / SKYUSD_MULTIPLIER,
-    onSideB: Number(sideBBetRaw) / SKYUSD_MULTIPLIER,
-    claimed
-  };
+    const [sideABetRaw, drawBetRaw, sideBBetRaw, claimed] = result as [bigint, bigint, bigint, boolean];
+    return {
+      onSideA: Number(sideABetRaw) / SKYUSD_MULTIPLIER,
+      onDraw: Number(drawBetRaw) / SKYUSD_MULTIPLIER,
+      onSideB: Number(sideBBetRaw) / SKYUSD_MULTIPLIER,
+      claimed
+    };
+  } catch (error) {
+    // Fallback for legacy 2-way crypto markets
+    const legacyAbi = [{
+      "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+      "name": "getUserPosition",
+      "outputs": [
+        { "internalType": "uint256", "name": "_yesBet", "type": "uint256" },
+        { "internalType": "uint256", "name": "_noBet", "type": "uint256" },
+        { "internalType": "bool", "name": "_claimed", "type": "bool" }
+      ],
+      "stateMutability": "view", "type": "function"
+    }] as const;
+
+    const result = await publicClient.readContract({
+      address: marketAddress,
+      abi: legacyAbi,
+      functionName: 'getUserPosition',
+      args: [userAddress]
+    });
+    const [yesBetRaw, noBetRaw, claimed] = result as [bigint, bigint, boolean];
+    return {
+      onSideA: Number(yesBetRaw) / SKYUSD_MULTIPLIER,
+      onDraw: 0,
+      onSideB: Number(noBetRaw) / SKYUSD_MULTIPLIER,
+      claimed
+    };
+  }
 }
 
 export async function calculateUserWinnings(marketAddress: `0x${string}`, userAddress: `0x${string}`): Promise<{ ifSideAWins: number; ifDrawWins: number; ifSideBWins: number }> {
   const publicClient = getPublicClient();
 
-  const [sideAPoolRaw, drawPoolRaw, sideBPoolRaw, userPos] = await Promise.all([
-    publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'yesPool', args: [] }),
-    publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'drawPool', args: [] }),
-    publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'noPool', args: [] }),
-    publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'getUserPosition', args: [userAddress] })
-  ]);
+  let sideAPoolRaw = 0n, drawPoolRaw = 0n, sideBPoolRaw = 0n;
+  let sideABetRaw = 0n, drawBetRaw = 0n, sideBBetRaw = 0n;
 
-  const [sideABetRaw, drawBetRaw, sideBBetRaw] = userPos as [bigint, bigint, bigint, boolean];
+  try {
+    const [aPool, dPool, bPool, userPos] = await Promise.all([
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'yesPool', args: [] }),
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'drawPool', args: [] }),
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'noPool', args: [] }),
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'getUserPosition', args: [userAddress] })
+    ]);
+    sideAPoolRaw = aPool as bigint;
+    drawPoolRaw = dPool as bigint;
+    sideBPoolRaw = bPool as bigint;
+    const pos = userPos as [bigint, bigint, bigint, boolean];
+    sideABetRaw = pos[0];
+    drawBetRaw = pos[1];
+    sideBBetRaw = pos[2];
+  } catch (e) {
+    // Legacy fallback
+    const legacyAbi = [{
+      "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+      "name": "getUserPosition",
+      "outputs": [
+        { "internalType": "uint256", "name": "_yesBet", "type": "uint256" },
+        { "internalType": "uint256", "name": "_noBet", "type": "uint256" },
+        { "internalType": "bool", "name": "_claimed", "type": "bool" }
+      ],
+      "stateMutability": "view", "type": "function"
+    }] as const;
+
+    const [aPool, bPool, userPos] = await Promise.all([
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'yesPool', args: [] }),
+      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'noPool', args: [] }),
+      publicClient.readContract({ address: marketAddress, abi: legacyAbi, functionName: 'getUserPosition', args: [userAddress] })
+    ]);
+    sideAPoolRaw = aPool as bigint;
+    sideBPoolRaw = bPool as bigint;
+    const pos = userPos as [bigint, bigint, boolean];
+    sideABetRaw = pos[0];
+    sideBBetRaw = pos[1];
+  }
+
   const sideAPool = Number(sideAPoolRaw) / SKYUSD_MULTIPLIER;
   const drawPool = Number(drawPoolRaw) / SKYUSD_MULTIPLIER;
   const sideBPool = Number(sideBPoolRaw) / SKYUSD_MULTIPLIER;

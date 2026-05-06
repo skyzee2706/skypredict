@@ -11,19 +11,19 @@ import { TOKEN_SYMBOL } from '../../lib/constants';
 
 export default function FaucetPage() {
     const router = useRouter();
-    const { isConnected, connect } = useWallet();
+    const { isConnected, connect, walletAddress } = useWallet();
     const { showToast } = useToast();
     const [isClaiming, setIsClaiming] = useState(false);
 
     const handleClaim = async () => {
-        if (!isConnected) {
+        if (!isConnected || !walletAddress) {
             connect();
             return;
         }
 
         setIsClaiming(true);
         try {
-            await dripUsdl();
+            await dripUsdl(walletAddress as `0x${string}`);
             showToast(`1000 ${TOKEN_SYMBOL} claimed successfully.`, 'success');
         } catch (error: unknown) {
             console.error('Faucet error:', error);

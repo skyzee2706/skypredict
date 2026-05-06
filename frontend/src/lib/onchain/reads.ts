@@ -205,36 +205,50 @@ async function fetchAllMarketsRaw(): Promise<`0x${string}`[]> {
   }
 }
 
-export async function fetchMarketsByStatus(status: MarketState): Promise<MarketData[]> {
+export async function fetchAllMarkets(
+  statuses: MarketState[] = ['ACTIVE', 'RESOLVING', 'RESOLVED', 'UNDETERMINED']
+): Promise<MarketData[]> {
   const addresses = await fetchAllMarketsRaw();
-  const markets = await Promise.all(
-    addresses.map(async (addr) => {
-      try {
-        return await fetchMarketInfo(addr);
-      } catch (error) {
-        console.error('Failed market read:', addr, error);
-        return null;
-      }
-    })
-  );
-  const cleaned = markets.filter((m): m is MarketData => m !== null);
+  
+  // Chunking to prevent RPC 429 errors
+  const chunkArray = <T,>(arr: T[], size: number): T[][] => {
+      return arr.reduce((acc, _, i) => {
+          if (i % size === 0) acc.push(arr.slice(i, i + size));
+          return acc;
+      }, [] as T[][]);
+  };
 
-  return cleaned
+  const marketChunks = chunkArray(addresses, 5);
+  const allMarkets: MarketData[] = [];
+
+  for (const chunk of marketChunks) {
+      const chunkResults = await Promise.all(
+          chunk.map(async (addr) => {
+              try {
+                  return await fetchMarketInfo(addr);
+              } catch (error) {
+                  console.error('Failed market read:', addr, error);
+                  return null;
+              }
+          })
+      );
+      allMarkets.push(...chunkResults.filter((m): m is MarketData => m !== null));
+      // Add a 200ms delay between chunks to avoid 429 Too Many Requests
+      await new Promise(r => setTimeout(r, 200));
+  }
+
+  return allMarkets
     .filter((m) => {
-      if (status === 'UNDETERMINED') {
+      if (statuses.includes('UNDETERMINED') && m.state !== 'RESOLVED') {
         const deadline = Number(m.deadline);
         const now = Math.floor(Date.now() / 1000);
-        return m.state !== 'RESOLVED' && deadline > 0 && deadline < now;
+        if (deadline > 0 && deadline < now) return true;
       }
-      return m.state === status;
+      return statuses.includes(m.state);
     })
     .sort((a, b) => Number(a.deadline) - Number(b.deadline));
 }
 
-export async function fetchAllMarkets(
-  statuses: MarketState[] = ['ACTIVE', 'RESOLVING', 'RESOLVED', 'UNDETERMINED']
-) {
-  const requested = statuses.filter((s) => s !== 'UNDETERMINED');
-  const results = await Promise.all(requested.map((s) => fetchMarketsByStatus(s)));
-  return results.flat();
+export async function fetchMarketsByStatus(status: MarketState): Promise<MarketData[]> {
+    return fetchAllMarkets([status]);
 }

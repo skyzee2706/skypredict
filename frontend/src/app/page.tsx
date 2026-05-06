@@ -14,7 +14,6 @@ export default function Home() {
       <Header onNavigate={(page) => {
         if (page === 'markets') router.push('/markets');
         else if (page === 'faucet') router.push('/faucet');
-        else if (page === 'leaderboard') router.push('/leaderboard');
         else if (page === 'portfolio') router.push('/portfolio');
         else if (page === 'landing') router.push('/');
       }} currentPage="landing" />
