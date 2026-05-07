@@ -16,6 +16,16 @@ function getPublicClient() {
   });
 }
 
+const FAUCET_FEE_WEI = 1_000_000_000_000_000n;
+
+async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<void> {
+  const publicClient = getPublicClient();
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== 'success') {
+    throw new Error('Transaction failed on-chain.');
+  }
+}
+
 export type MarketOutcome = 'YES' | 'NO' | 'DRAW';
 
 export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutcome, amount: number): Promise<void> {
@@ -29,7 +39,6 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error('Bet amount must be greater than zero.');
   }
 
-  // Pre-flight: check betting deadline
   const bettingEndTime = (await publicClient.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
@@ -42,7 +51,6 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error('Betting is closed for this market. The deadline has passed.');
   }
 
-  // Pre-flight: check token balance
   const balance = (await publicClient.readContract({
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
@@ -54,7 +62,6 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error(`Insufficient SkyUSD balance. You have ${Number(balance) / SKYUSD_MULTIPLIER} but need ${amount}.`);
   }
 
-  // Pre-flight: check allowance
   const allowance = (await publicClient.readContract({
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
@@ -68,24 +75,26 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
 
   const functionName = outcome === 'YES' ? 'buyYes' : outcome === 'NO' ? 'buyNo' : 'buyDraw';
 
-  await writeContract(wagmiConfig, {
+  const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: marketAddress,
     abi: MARKET_ABI,
     functionName,
     args: [amountInUnits]
   });
+  await waitForConfirmedReceipt(hash);
 }
 
 export async function claimRewards(marketAddress: `0x${string}`): Promise<void> {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
-  await writeContract(wagmiConfig, {
+  const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: marketAddress,
     abi: MARKET_ABI,
     functionName: 'claim',
     args: []
   });
+  await waitForConfirmedReceipt(hash);
 }
 
 export async function checkUsdlAllowance(userAddress: `0x${string}`, spenderAddress: `0x${string}`): Promise<bigint> {
@@ -114,13 +123,14 @@ export async function approveUsdlUnlimited(spenderAddress: `0x${string}`): Promi
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
   const maxUint256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
-  await writeContract(wagmiConfig, {
+  const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
     functionName: 'approve',
     args: [spenderAddress, maxUint256]
   });
+  await waitForConfirmedReceipt(hash);
 }
 
 export async function dripUsdl(userAddress?: `0x${string}`): Promise<void> {
@@ -129,13 +139,37 @@ export async function dripUsdl(userAddress?: `0x${string}`): Promise<void> {
   const targetAddress = userAddress || account.address;
   if (!targetAddress) throw new Error('Wallet not connected');
 
-  await writeContract(wagmiConfig, {
+  const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
     functionName: 'faucet',
     args: [targetAddress],
+    value: FAUCET_FEE_WEI
   });
+  await waitForConfirmedReceipt(hash);
+}
+
+export async function withdrawFaucetFees(recipient: `0x${string}`): Promise<void> {
+  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  const hash = await writeContract(wagmiConfig, {
+    chainId: seismicTestnet.id,
+    address: TOKEN_ADDRESS as `0x${string}`,
+    abi: SKYUSD_ABI,
+    functionName: 'withdrawFees',
+    args: [recipient]
+  });
+  await waitForConfirmedReceipt(hash);
+}
+
+export async function getFaucetFeeBalance(): Promise<bigint> {
+  const publicClient = getPublicClient();
+  return (await publicClient.readContract({
+    address: TOKEN_ADDRESS as `0x${string}`,
+    abi: SKYUSD_ABI,
+    functionName: 'faucetFeeBalance',
+    args: []
+  })) as bigint;
 }
 
 export async function isLegitBet(marketAddress: `0x${string}`): Promise<boolean> {

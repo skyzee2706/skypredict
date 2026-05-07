@@ -4,11 +4,11 @@
   "rpcUrl": "https://rpc.ritualfoundation.org",
   "explorerUrl": "https://explorer.ritualfoundation.org",
   "owner": "0x0000069F157d774273D95b0909D41bb220A4dC7d",
-  "token": "0x007415F1e53B584Ee9aac5b7eAbcFa32a712abb2",
-  "skyUsd": "0x007415F1e53B584Ee9aac5b7eAbcFa32a712abb2",
-  "usdl": "0x007415F1e53B584Ee9aac5b7eAbcFa32a712abb2",
-  "btcOracle": "0xa58469a79fe3a7c729c9546324050Df71564FdEe",
-  "ethOracle": "0x8E39649248396f0DD650BBD7F1A8D5043FEA23fd",
-  "factory": "0x845684304b4816538D70A87371EAEff0900d65c0",
-  "timestamp": "2026-05-07T15:39:36.799Z"
+  "token": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
+  "skyUsd": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
+  "usdl": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
+  "btcOracle": "0x035A0D40e89B3847c40DAbF1f44eD200b91C50dc",
+  "ethOracle": "0x532446181AE940AF4B88D05CD4628BaBE65C702f",
+  "factory": "0x81aD70855601C1b49B1A7BAe794df8626DC1fB55",
+  "timestamp": "2026-05-07T17:37:38.115Z"
 }

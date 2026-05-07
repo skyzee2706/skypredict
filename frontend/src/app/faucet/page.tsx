@@ -25,6 +25,7 @@ export default function FaucetPage() {
         try {
             await dripUsdl(walletAddress as `0x${string}`);
             showToast(`1000 ${TOKEN_SYMBOL} claimed successfully.`, 'success');
+            window.dispatchEvent(new Event('skyusd:balance-refresh'));
         } catch (error: unknown) {
             console.error('Faucet error:', error);
             const errorObj = error as { message?: string; code?: string | number };
@@ -37,7 +38,7 @@ export default function FaucetPage() {
                 errorMessage.includes('user rejected')
             ) {
                 showToast('Claim cancelled by user.', 'info');
-            } else if (errorMessage.includes('exceeds 24h mint limit') || errorMessage.includes('cooldown')) {
+            } else if (errorMessage.includes('exceeds 24h mint limit') || errorMessage.includes('cooldown') || errorMessage.includes('24h claim limit')) {
                 showToast('Daily limit reached. Come back tomorrow.', 'warning');
             } else {
                 showToast(`Failed to claim ${TOKEN_SYMBOL}. Please try again.`, 'error');

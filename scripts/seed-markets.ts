@@ -8,8 +8,8 @@ const RPC_URL =
   process.env.SEPOLIA_RPC_URL ||
   "https://gcp-1.seismictest.net/rpc";
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "";
-const FACTORY_ADDRESS = (process.env.NEXT_PUBLIC_FACTORY_ADDRESS as string).toLowerCase();
-const ORACLE_ADDRESS = (process.env.NEXT_PUBLIC_ORACLE_ADDRESS as string).toLowerCase();
+const FACTORY_ADDRESS = (process.env.NEXT_PUBLIC_FACTORY_ADDRESS || process.env.FACTORY_ADDRESS || "").toLowerCase();
+const ORACLE_ADDRESS = (process.env.NEXT_PUBLIC_ORACLE_ADDRESS || process.env.ORACLE_ADDRESS || process.env.BTC_ORACLE_ADDRESS || "").toLowerCase();
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const signer = new ethers.Wallet(PRIVATE_KEY, provider);
@@ -60,7 +60,7 @@ async function main() {
 
     console.log("2) Daily...");
     end = nextMidnightUTC();
-    bettingEnd = end - 12 * 60 * 60; // closes 12 hours before settlement
+    bettingEnd = end - 3 * 60 * 60; // closes 3 hours before settlement
     await (await factory.createMarket(`Will BTC/USD be above $${usd} by midnight ${formatDateUTC(end)}?`, price, end, bettingEnd)).wait();
 
     console.log("3) Weekly...");

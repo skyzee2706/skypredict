@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sky Predict Whitepaper</title>
+  <meta name="description" content="Sky Predict whitepaper: an AI-native prediction market vision for Ritual Chain, autonomous market operations, and SkyUSD-denominated forecasting." />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div class="site-shell">
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="#top" aria-label="Sky Predict Whitepaper home">
+          <img src="assets/logo-main.png" alt="Sky Predict logo" />
+          <span>Sky Predict</span>
+        </a>
+        <div class="header-pill">Protocol Whitepaper</div>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="whitepaper-title">
+        <div>
+          <span class="eyebrow">AI-Native Prediction Markets</span>
+          <h1 id="whitepaper-title">A Ritual-native market layer for autonomous forecasting.</h1>
+          <p>
+            Sky Predict is an AI-native prediction market interface for SkyUSD-denominated forecasting,
+            backed by a Ritual-native execution architecture for data, automation, and market intelligence.
+          </p>
+          <p>
+            This whitepaper presents the protocol model: transparent user participation at the interface layer,
+            with Ritual-powered settlement, scheduled operations, and AI-assisted intelligence operating beneath the surface.
+          </p>
+        </div>
+        <aside class="hero-card" aria-label="Protocol snapshot">
+          <h2>Protocol Direction</h2>
+          <div class="metric-grid">
+            <div class="metric"><strong>1979</strong><span>Ritual Chain ID</span></div>
+            <div class="metric"><strong>SkyUSD</strong><span>Market unit</span></div>
+            <div class="metric"><strong>TEE</strong><span>Backend compute path</span></div>
+            <div class="metric"><strong>AI</strong><span>Protocol intelligence layer</span></div>
+          </div>
+        </aside>
+      </section>
+
+      <div class="layout">
+        <nav class="toc" aria-label="Whitepaper table of contents">
+          <div class="toc-title">Contents</div>
+          <a href="#abstract" class="active">Abstract</a>
+          <a href="#ritual">Ritual Stack</a>
+          <a href="#markets">Market Design</a>
+          <a href="#skyusd">SkyUSD</a>
+          <a href="#architecture">Architecture</a>
+          <a href="#ai">AI Intelligence</a>
+          <a href="#resolution">Resolution Layer</a>
+          <a href="#economics">Economics</a>
+          <a href="#security">Security</a>
+          <a href="#roadmap">Expansion Roadmap</a>
+          <button class="print-button" id="printWhitepaper" type="button">Print / Save PDF</button>
+        </nav>
+
+        <div class="content">
+          <section id="abstract" class="content-card">
+            <h2>Abstract</h2>
+            <p>
+              Prediction markets are coordination engines. They transform uncertainty into prices, reveal collective conviction,
+              and create transparent incentives around future events. Sky Predict applies this model through a clean SkyUSD market interface
+              while keeping execution, settlement, and intelligence workflows aligned with Ritual Chain.
+            </p>
+            <p>
+              The protocol centers on SkyUSD-denominated markets for crypto prices and sports outcomes, with a structure that can extend
+              into macro, esports, AI benchmarks, and on-chain event categories without changing the core user experience.
+            </p>
+            <p>
+              Sky Predict is designed as a Ritual-native forecasting system: on-chain markets provide transparent custody and payouts,
+              while Ritual compute primitives handle the backend path for data retrieval, automation, and AI-assisted market intelligence.
+            </p>
+          </section>
+
+          <section id="ritual" class="content-card">
+            <h2>Ritual Stack</h2>
+            <p>
+              Sky Predict is built around Ritual Chain's TEE-EOVMT model: deterministic EVM execution handles token accounting,
+              market state, and payout logic, while delegated Ritual compute supports external data, model inference,
+              and automated market operations behind the interface.
+            </p>
+            <div class="grid-2">
+              <div class="callout"><strong>HTTP 0x0801</strong><p>Provides the backend data path for TEE-attested retrieval of exchange prices, fixture data, and settlement evidence.</p></div>
+              <div class="callout"><strong>JQ 0x0803</strong><p>Parses JSON responses into typed values that can be mapped into deterministic market outcomes.</p></div>
+              <div class="callout"><strong>LLM 0x0802</strong><p>Powers protocol-side summaries, rule explanations, research context, and settlement commentary.</p></div>
+              <div class="callout"><strong>Scheduler</strong><p>Coordinates recurring backend operations such as creation windows, expiry checks, settlement triggers, and agent wakeups.</p></div>
+            </div>
+          </section>
+
+          <section id="markets" class="content-card">
+            <h2>Market Design</h2>
+            <p>
+              Sky Predict focuses on market categories that are easy to understand, repeatable, and data-rich. The initial design includes
+              crypto directional markets and sports outcome markets, with expansion potential into macro, esports, AI benchmarks, and on-chain events.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Category</th><th>Outcomes</th><th>Settlement Model</th></tr></thead>
+                <tbody>
+                  <tr><td>Crypto</td><td>Above / Below</td><td>Directional market resolution using clear price rules and structured settlement data.</td></tr>
+                  <tr><td>Sports</td><td>Home / Draw / Away</td><td>Outcome mapping based on final-score rules and transparent market configuration.</td></tr>
+                  <tr><td>AI Events</td><td>Custom</td><td>Expansion category for agent-assisted market templates and explicit resolver rules.</td></tr>
+                  <tr><td>On-chain Events</td><td>Custom</td><td>Expansion category for direct contract reads, scheduled checks, and programmable settlement conditions.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="skyusd" class="content-card">
+            <h2>SkyUSD</h2>
+            <p>
+              SkyUSD is the accounting and participation unit for Sky Predict markets. It provides a consistent denomination across market categories,
+              reduces UI complexity, and creates a stable interface for prediction positions, portfolio accounting, and leaderboard analytics.
+            </p>
+            <ul>
+              <li>Used as the primary betting unit across the market interface.</li>
+              <li>Designed for simple portfolio accounting and clear position sizing.</li>
+              <li>Supports streamlined testnet distribution for early users and protocol testing.</li>
+              <li>Provides a consistent base for analytics, rewards, and reputation systems.</li>
+            </ul>
+          </section>
+
+          <section id="architecture" class="content-card">
+            <h2>Architecture</h2>
+            <p>
+              The Sky Predict architecture separates market custody, market deployment, backend settlement workflows, and user experience. This modular approach
+              keeps the visible interface simple while allowing Ritual-native compute to operate as protocol infrastructure.
+            </p>
+            <div class="grid-2">
+              <div class="callout"><strong>Market contracts</strong><p>Hold pools, track user positions, enforce deadlines, store resolution state, and distribute payouts.</p></div>
+              <div class="callout"><strong>Factory layer</strong><p>Creates standardized markets and exposes a discoverable registry for the frontend and operations layer.</p></div>
+              <div class="callout"><strong>Settlement flow</strong><p>Uses receipt-aware updates, clear market state, and deterministic payout rules for user-facing reliability.</p></div>
+              <div class="callout"><strong>Ritual compute layer</strong><p>Connects HTTP, JQ, LLM, Scheduler, AsyncJobTracker, RitualWallet, and TEE executor workflows beneath the market UI.</p></div>
+            </div>
+          </section>
+
+          <section id="ai" class="content-card">
+            <h2>AI-Assisted Market Intelligence</h2>
+            <p>
+              Sky Predict uses Ritual's AI-native architecture as an intelligence and operations layer around the core market system.
+              The primary market experience remains simple: users choose a market, place a SkyUSD position, and claim after resolution.
+              AI components run as protocol-side support for market description, monitoring, risk context, and settlement explanation.
+            </p>
+            <ul>
+              <li>Market intelligence modules organize event context, historical movement, and category-specific risk signals.</li>
+              <li>Research summaries help users understand market background without replacing their own decision-making.</li>
+              <li>Resolution support tools structure settlement evidence and make final outcomes easier to audit.</li>
+              <li>Natural-language interfaces can explain rules, exposure, and settlement logic in a clear user-facing format.</li>
+            </ul>
+          </section>
+
+          <section id="resolution" class="content-card">
+            <h2>Resolution Layer</h2>
+            <p>
+              Reliable market resolution requires three properties: clear rules, dependable data, and transparent execution. Sky Predict's resolution design
+              keeps the user-facing flow simple while Ritual-native workflows handle data retrieval, parsing, scheduling, and settlement evidence behind the scenes.
+            </p>
+            <ol>
+              <li>A market defines its accepted rules, data context, and outcome mapping before betting opens.</li>
+              <li>Users place SkyUSD positions through the visible market interface before the deadline.</li>
+              <li>Backend resolution workflows collect and normalize category-specific settlement data.</li>
+              <li>Ritual-compatible parsing maps the final value to the winning outcome through deterministic rules.</li>
+              <li>The market records the final outcome and unlocks winner claims.</li>
+            </ol>
+          </section>
+
+          <section id="economics" class="content-card">
+            <h2>Protocol Economics</h2>
+            <p>
+              Sky Predict is designed around low-friction participation and transparent winner-side economics. Users size positions in SkyUSD,
+              markets aggregate liquidity into outcome pools, and resolved winners receive proportional payouts according to final settlement.
+            </p>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Flow</th><th>Description</th></tr></thead>
+                <tbody>
+                  <tr><td>Participation</td><td>Users enter positions with SkyUSD before the market deadline.</td></tr>
+                  <tr><td>Liquidity</td><td>Each side's pool reflects market conviction and available payout depth.</td></tr>
+                  <tr><td>Settlement</td><td>Resolution determines the winning outcome and unlocks winner claims.</td></tr>
+                  <tr><td>Protocol sustainability</td><td>Long-term economics may include claim-side protocol revenue, premium market tools, and data products.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section id="security" class="content-card">
+            <h2>Security and Trust Model</h2>
+            <p>
+              Sky Predict's security model prioritizes transparent custody, explicit deadlines, visible market rules, and minimized manual
+              operational trust. TEE-backed delegated compute, async lifecycle tracking, callback validation, and scheduled workflows form
+              the protocol-side safety model without requiring additional complexity in the user interface.
+            </p>
+            <ul>
+              <li>Market custody and payout accounting remain on-chain and auditable.</li>
+              <li>External data workflows are source-bound, reproducible, and evidence-oriented.</li>
+              <li>Async workflows account for retries, expiry, callback validation, and state changes between request and delivery.</li>
+              <li>Production deployments are designed around independent contract audits and operational monitoring.</li>
+            </ul>
+          </section>
+
+          <section id="roadmap" class="content-card">
+            <h2>Expansion Roadmap</h2>
+            <p>
+              The current Sky Predict market stack is established around contracts, SkyUSD, transparent market flows, and Ritual-native backend infrastructure.
+              The roadmap focuses on advanced agentic capabilities that can expand the protocol without cluttering the base market interface.
+            </p>
+            <ul>
+              <li><strong>Persistent Agent Network:</strong> long-running market research agents with soul, memory, StorageRef persistence, heartbeat monitoring, and CID-based revival.</li>
+              <li><strong>Sovereign Agent Executors:</strong> Scheduler-driven agents that wake themselves, run CLI harnesses inside TEEs, analyze markets, and write results back through callbacks.</li>
+              <li><strong>DKMS-protected Strategy Memory:</strong> encrypted agent state, private research notes, and protected API credentials using Ritual secret and key-management primitives.</li>
+              <li><strong>Streaming AI Analyst:</strong> EIP-712 verified LLM streaming for live market explanations, portfolio summaries, and settlement commentary.</li>
+              <li><strong>Multimodal Markets:</strong> event categories that use image, media, and document interpretation for richer real-world prediction markets.</li>
+              <li><strong>Reputation Intelligence:</strong> agent-assisted scoring for user accuracy, liquidity quality, dispute behavior, and long-term forecasting reputation.</li>
+            </ul>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        <span>© Sky Predict. AI-native prediction markets on Ritual.</span>
+        <span>Ritual-native backend infrastructure with a clean SkyUSD market interface.</span>
+      </div>
+    </footer>
+  </div>
+  <script src="assets/app.js"></script>
+</body>
+</html>

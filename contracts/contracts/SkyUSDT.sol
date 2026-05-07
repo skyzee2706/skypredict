@@ -6,22 +6,28 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title SkyUSDT
- * @notice Test USDT token for Sky Market on Sepolia.
- *         Anyone can call faucet() to receive 1,000 USDT (once per 24h per recipient).
- *         Owner can mint any amount anytime.
+ * @notice Test SkyUSD token for SkyPredict on Ritual.
+ *         Faucet claims require a small native fee and are limited per wallet.
+ *         Owner can mint tokens and withdraw accumulated faucet fees.
  */
 contract SkyUSDT is ERC20, Ownable {
-    uint8  private constant DECIMALS        = 6;
-    uint256 public constant FAUCET_AMOUNT   = 1_000 * 10 ** 6; // 1,000 USDT
-    uint256 public constant FAUCET_COOLDOWN = 24 hours;
+    uint8 private constant DECIMALS = 6;
+    uint256 public constant FAUCET_AMOUNT = 1_000 * 10 ** 6;
+    uint256 public constant FAUCET_FEE = 0.001 ether;
+    uint256 public constant FAUCET_WINDOW = 24 hours;
+    uint256 public constant MAX_CLAIMS_PER_WINDOW = 2;
 
-    // recipient => last claim timestamp
-    mapping(address => uint256) public lastClaim;
+    struct ClaimWindow {
+        uint64 windowStart;
+        uint8 claims;
+    }
 
-    event FaucetClaimed(address indexed by, address indexed recipient, uint256 amount);
+    mapping(address => ClaimWindow) public claimWindows;
 
-    constructor(address initialOwner) ERC20("Sky USD Tether", "USDT") Ownable(initialOwner) {
-        // Mint 1,000,000 USDT to deployer
+    event FaucetClaimed(address indexed by, address indexed recipient, uint256 amount, uint256 feePaid);
+    event FaucetFeesWithdrawn(address indexed owner, uint256 amount);
+
+    constructor(address initialOwner) ERC20("Sky USD", "SkyUSD") Ownable(initialOwner) {
         _mint(initialOwner, 1_000_000 * 10 ** DECIMALS);
     }
 
@@ -29,36 +35,55 @@ contract SkyUSDT is ERC20, Ownable {
         return DECIMALS;
     }
 
-    /**
-     * @notice Claim 1,000 USDT to `recipient`.
-     *         Each recipient can only receive once per 24 hours.
-     *         Claimer pays their own gas fee.
-     * @param recipient The address to receive the USDT (can be caller or any other address)
-     */
-    function faucet(address recipient) external {
+    function faucet(address recipient) external payable {
         require(recipient != address(0), "Invalid recipient");
-        require(
-            block.timestamp >= lastClaim[recipient] + FAUCET_COOLDOWN,
-            "Cooldown: wait 24h between claims"
-        );
-        lastClaim[recipient] = block.timestamp;
+        require(msg.value == FAUCET_FEE, "Invalid faucet fee");
+
+        ClaimWindow storage claimWindow = claimWindows[recipient];
+        if (block.timestamp >= uint256(claimWindow.windowStart) + FAUCET_WINDOW) {
+            claimWindow.windowStart = uint64(block.timestamp);
+            claimWindow.claims = 0;
+        }
+
+        require(claimWindow.claims < MAX_CLAIMS_PER_WINDOW, "24h claim limit reached");
+        claimWindow.claims += 1;
+
         _mint(recipient, FAUCET_AMOUNT);
-        emit FaucetClaimed(msg.sender, recipient, FAUCET_AMOUNT);
+        emit FaucetClaimed(msg.sender, recipient, FAUCET_AMOUNT, msg.value);
     }
 
-    /**
-     * @notice Owner can mint any amount to any address.
-     */
     function ownerMint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
     }
 
-    /**
-     * @notice Returns seconds remaining before `recipient` can claim again. 0 = can claim now.
-     */
+    function withdrawFees(address payable recipient) external onlyOwner {
+        require(recipient != address(0), "Invalid recipient");
+        uint256 amount = address(this).balance;
+        require(amount > 0, "No fees to withdraw");
+
+        (bool success, ) = recipient.call{value: amount}("");
+        require(success, "Fee withdrawal failed");
+        emit FaucetFeesWithdrawn(recipient, amount);
+    }
+
+    function faucetFeeBalance() external view returns (uint256) {
+        return address(this).balance;
+    }
+
     function cooldownRemaining(address recipient) external view returns (uint256) {
-        uint256 next = lastClaim[recipient] + FAUCET_COOLDOWN;
+        ClaimWindow memory claimWindow = claimWindows[recipient];
+        if (claimWindow.claims < MAX_CLAIMS_PER_WINDOW) return 0;
+
+        uint256 next = uint256(claimWindow.windowStart) + FAUCET_WINDOW;
         if (block.timestamp >= next) return 0;
         return next - block.timestamp;
+    }
+
+    function claimsRemaining(address recipient) external view returns (uint256) {
+        ClaimWindow memory claimWindow = claimWindows[recipient];
+        if (block.timestamp >= uint256(claimWindow.windowStart) + FAUCET_WINDOW) {
+            return MAX_CLAIMS_PER_WINDOW;
+        }
+        return MAX_CLAIMS_PER_WINDOW - claimWindow.claims;
     }
 }

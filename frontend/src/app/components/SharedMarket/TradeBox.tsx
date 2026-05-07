@@ -150,6 +150,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
             await dripUsdl();
             showToast(`Successfully received 1000 ${TOKEN_SYMBOL}!`, 'success');
             await fetchTokenBalance();
+            window.dispatchEvent(new Event('skyusd:balance-refresh'));
         } catch (error: unknown) {
             console.error('Failed to drip token - detailed error:', error);
 
@@ -438,6 +439,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                                 showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
                                 await fetchTokenBalance();
                                 await fetchAllowance();
+                                window.dispatchEvent(new Event('skyusd:balance-refresh'));
                                 setAmount('');
                             } catch (error: unknown) {
                                 console.error('Failed to place bet:', error);

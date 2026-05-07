@@ -108,7 +108,7 @@ export default function LeaderboardPage() {
                             fontSize: '16px',
                             lineHeight: 1.7
                         }}>
-                            Ranking trader, win rate, volume, dan realized PNL sedang disiapkan. Halaman ini sudah tersedia di menu dan akan aktif saat leaderboard indexer siap.
+                            Trader rankings, win rate, volume, and realized PNL are being engineered with precision. This page is already wired into the app and will go live when the leaderboard indexer is ready.
                         </p>
                     </section>
                 </main>

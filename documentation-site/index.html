@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sky Predict Documentation</title>
+  <meta name="description" content="Sky Predict operator and developer documentation for contracts, frontend, scheduler, deployment, and troubleshooting." />
+  <link rel="icon" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <a class="brand" href="#top" aria-label="Sky Predict Documentation home">
+        <img src="assets/logo-main.png" alt="Sky Predict logo" />
+        <span>Sky Predict</span>
+      </a>
+      <div class="version-pill">Operator Documentation</div>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero" aria-labelledby="docs-title">
+      <div class="eyebrow">Deployment & Operations</div>
+      <h1 id="docs-title">Everything needed to operate the current Sky Predict stack.</h1>
+      <p>
+        This documentation covers the smart contracts, frontend configuration, market scheduler, PM2 deployment,
+        admin treasury flow, and the most common troubleshooting paths for the Ritual testnet environment.
+      </p>
+      <div class="search-panel">
+        <input id="docSearch" type="search" placeholder="Search documentation sections..." aria-label="Search documentation" />
+        <a href="#quick-start">Quick Start</a>
+      </div>
+    </section>
+
+    <div class="docs-layout">
+      <nav class="sidebar" aria-label="Documentation navigation">
+        <div class="sidebar-title">Sections</div>
+        <a class="active" href="#overview">Overview</a>
+        <a href="#structure">Structure</a>
+        <a href="#env">Environment</a>
+        <a href="#quick-start">Quick Start</a>
+        <a href="#contracts">Contracts</a>
+        <a href="#frontend">Frontend</a>
+        <a href="#scheduler">Scheduler</a>
+        <a href="#admin">Admin</a>
+        <a href="#fees">Fees</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#checklist">Checklist</a>
+      </nav>
+
+      <div class="docs-content">
+        <section id="overview" class="doc-card">
+          <h2>Overview</h2>
+          <p>
+            Sky Predict is a Ritual testnet prediction-market platform for crypto and football markets. Users bet with SkyUSD,
+            a testnet ERC-20 token. Markets are deployed by a factory contract, resolved by the backend scheduler, and displayed through
+            a Next.js frontend.
+          </p>
+          <div class="quick-grid">
+            <div class="quick-card"><strong>Contracts</strong><p>SkyUSD, MarketFactory, PredictionMarket, and oracle helpers.</p></div>
+            <div class="quick-card"><strong>Frontend</strong><p>Next.js app with markets, portfolio, faucet, leaderboard, and hidden admin page.</p></div>
+            <div class="quick-card"><strong>Scheduler</strong><p>`scripts/auto-market.ts` creates and resolves markets in production.</p></div>
+          </div>
+        </section>
+
+        <section id="structure" class="doc-card">
+          <h2>Repository Structure</h2>
+          <pre><code>.
+├── contracts/
+│   ├── contracts/
+│   │   ├── SkyUSDT.sol
+│   │   ├── MarketFactory.sol
+│   │   └── PredictionMarket.sol
+│   └── scripts/deploy.ts
+├── frontend/
+│   └── src/app/
+│       ├── admin/
+│       ├── faucet/
+│       ├── leaderboard/
+│       ├── markets/
+│       └── portfolio/
+├── scripts/
+│   ├── auto-market.ts
+│   ├── sports-markets.json
+│   └── force-resolve.ts
+├── ecosystem.config.js
+└── README.md</code></pre>
+          <p class="note">`scripts/sports-markets.json` is runtime cache and should stay gitignored.</p>
+        </section>
+
+        <section id="env" class="doc-card">
+          <h2>Environment Variables</h2>
+          <p>Keep the root, contracts, and frontend environments aligned after every reset deployment.</p>
+          <h3>Root `.env`</h3>
+          <pre><code>PRIVATE_KEY=your_deployer_private_key_without_0x
+NETWORK_NAME=Ritual
+CHAIN_ID=1979
+RITUAL_RPC_URL=https://rpc.ritualfoundation.org
+FACTORY_ADDRESS=0xYourFactory
+NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory
+USDL_ADDRESS=0xYourSkyUSD
+SKYUSD_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
+BTC_ORACLE_ADDRESS=0xYourBtcOracle
+ETH_ORACLE_ADDRESS=0xYourEthOracle
+FOOTBALL_DATA_API_KEY=your_football_data_api_key</code></pre>
+          <h3>Frontend `.env.local`</h3>
+          <pre><code>NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
+NEXT_PUBLIC_PRIVY_CLIENT_ID=your_privy_client_id
+NEXT_PUBLIC_BET_FACTORY_ADDRESS=0xYourFactory
+NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory
+NEXT_PUBLIC_TOKEN_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwner
+NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org</code></pre>
+          <p class="note">Never commit private keys, API keys, `.env`, `.env.local`, logs, or runtime caches.</p>
+        </section>
+
+        <section id="quick-start" class="doc-card">
+          <h2>Quick Start</h2>
+          <ol>
+            <li>Install root dependencies.</li>
+            <li>Install frontend dependencies.</li>
+            <li>Configure `.env`, `contracts/.env`, and `frontend/.env.local`.</li>
+            <li>Compile and deploy contracts.</li>
+            <li>Copy fresh addresses into all env files.</li>
+            <li>Run the frontend.</li>
+            <li>Start the scheduler with PM2.</li>
+          </ol>
+          <pre><code>npm install
+cd frontend
+npm install
+npm run dev</code></pre>
+        </section>
+
+        <section id="contracts" class="doc-card">
+          <h2>Contract Workflow</h2>
+          <h3>Compile</h3>
+          <pre><code>npm run compile</code></pre>
+          <h3>Deploy Fresh Stack</h3>
+          <pre><code>cd contracts
+npx hardhat run scripts/deploy.ts --network ritual</code></pre>
+          <p>After deploy, update addresses for SkyUSD, factory, and oracle helpers in every env file.</p>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Contract</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td>SkyUSDT.sol</td><td>SkyUSD token, paid faucet, claim limits, owner fee withdrawal.</td></tr>
+                <tr><td>MarketFactory.sol</td><td>Deploys and tracks prediction market clones.</td></tr>
+                <tr><td>PredictionMarket.sol</td><td>Handles positions, pools, resolution, and payouts.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">A total reset means old markets remain on-chain, but the app should use only markets from the fresh factory.</p>
+        </section>
+
+        <section id="frontend" class="doc-card">
+          <h2>Frontend Workflow</h2>
+          <pre><code>cd frontend
+npm run dev
+npm run build</code></pre>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Route</th><th>Purpose</th></tr></thead>
+              <tbody>
+                <tr><td>/</td><td>Landing page.</td></tr>
+                <tr><td>/markets</td><td>Market discovery and detail pages.</td></tr>
+                <tr><td>/portfolio</td><td>User positions and trading history.</td></tr>
+                <tr><td>/faucet</td><td>SkyUSD faucet page.</td></tr>
+                <tr><td>/leaderboard</td><td>Leaderboard/indexer display.</td></tr>
+                <tr><td>/admin</td><td>Hidden owner treasury dashboard.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Transaction helpers wait for confirmed receipts before showing success toasts. Balance refresh events update the UI after faucet claims,
+            approvals, bets, claims, and treasury withdrawal actions.
+          </p>
+        </section>
+
+        <section id="scheduler" class="doc-card">
+          <h2>Auto-Market Scheduler</h2>
+          <p>The canonical production scheduler is `scripts/auto-market.ts`.</p>
+          <h3>Local Run</h3>
+          <pre><code>npm run auto-market</code></pre>
+          <h3>Production with PM2</h3>
+          <pre><code>pm2 start ecosystem.config.js
+pm2 logs sky-market-scheduler</code></pre>
+          <h3>Restart After Env Changes</h3>
+          <pre><code>pm2 restart ecosystem.config.js --update-env</code></pre>
+          <ul>
+            <li>Crypto markets are created daily for supported tickers.</li>
+            <li>Crypto betting closes 3 hours before settlement.</li>
+            <li>Sports fixtures are discovered from football-data.org.</li>
+            <li>Finished sports fixtures are resolved from full-time scores.</li>
+          </ul>
+        </section>
+
+        <section id="admin" class="doc-card">
+          <h2>Admin Treasury</h2>
+          <p>The hidden admin page is available at:</p>
+          <pre><code>/admin</code></pre>
+          <ul>
+            <li>It is not linked from the landing page.</li>
+            <li>It requires wallet connection.</li>
+            <li>Only the configured owner/deployer wallet can withdraw faucet fees.</li>
+            <li>It reads treasury balance from `faucetFeeBalance()`.</li>
+            <li>It withdraws with `withdrawFees()`.</li>
+          </ul>
+        </section>
+
+        <section id="fees" class="doc-card">
+          <h2>Fee Model</h2>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Action</th><th>Fee</th></tr></thead>
+              <tbody>
+                <tr><td>Faucet claim</td><td>0.001 native Ritual token.</td></tr>
+                <tr><td>Place bet</td><td>No protocol fee, gas only.</td></tr>
+                <tr><td>Claim winning payout</td><td>10% protocol fee from payout.</td></tr>
+                <tr><td>Losing bet</td><td>No claimable payout.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="troubleshooting" class="doc-card">
+          <h2>Troubleshooting</h2>
+          <h3>Approval or Bet Fails</h3>
+          <ul>
+            <li>Confirm token and factory addresses point to the latest reset deployment.</li>
+            <li>Confirm the market belongs to the current factory.</li>
+            <li>Confirm the user has enough SkyUSD.</li>
+            <li>Confirm approval targets the current market contract.</li>
+            <li>Confirm the betting deadline has not passed.</li>
+          </ul>
+          <h3>Faucet Claim Fails</h3>
+          <ul>
+            <li>Wallet must have enough native Ritual token for gas and claim value.</li>
+            <li>Recipient must be below the 2-claims-per-24-hours limit.</li>
+            <li>Frontend ABI must mark faucet as payable.</li>
+            <li>Frontend must use the current SkyUSD address.</li>
+          </ul>
+          <h3>PM2 Uses Old Addresses</h3>
+          <pre><code>pm2 restart ecosystem.config.js --update-env
+pm2 logs sky-market-scheduler</code></pre>
+          <h3>ENOSPC</h3>
+          <p>`ENOSPC` means the server has no disk space available. Free disk, clear unused caches, or remove old build artifacts.</p>
+        </section>
+
+        <section id="checklist" class="doc-card">
+          <h2>Deployment Checklist</h2>
+          <ul>
+            <li>Root `.env` has current deployer and deployed addresses.</li>
+            <li>`contracts/.env` matches the deployed stack.</li>
+            <li>`frontend/.env.local` matches the same factory and SkyUSD token.</li>
+            <li>Contracts compile.</li>
+            <li>Frontend builds.</li>
+            <li>PM2 scheduler starts.</li>
+            <li>Scheduler creates markets from the current factory.</li>
+            <li>Faucet claim confirms and updates SkyUSD balance.</li>
+            <li>Approval and bet placement work on active markets.</li>
+            <li>Claim works after market resolution.</li>
+            <li>`/admin` withdraw remains owner-only.</li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>© Sky Predict. Ritual prediction market operations.</span>
+      <span>Static documentation site. No wallet connection included.</span>
+    </div>
+  </footer>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>

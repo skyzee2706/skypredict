@@ -80,7 +80,7 @@ export const SKYUSD_ABI = [
   {
     type: 'function',
     name: 'faucet',
-    stateMutability: 'nonpayable',
+    stateMutability: 'payable',
     inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
     outputs: []
   },
@@ -97,6 +97,34 @@ export const SKYUSD_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint8', internalType: 'uint8' }]
+  },
+  {
+    type: 'function',
+    name: 'withdrawFees',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
+    outputs: []
+  },
+  {
+    type: 'function',
+    name: 'faucetFeeBalance',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }]
+  },
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ name: '', type: 'address', internalType: 'address' }]
+  },
+  {
+    type: 'function',
+    name: 'claimsRemaining',
+    stateMutability: 'view',
+    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
+    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }]
   }
 ] as const satisfies Abi;
 

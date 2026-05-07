@@ -7,8 +7,11 @@ import Header from '../components/Header/Header';
 import { useWallet } from '../providers/WalletProvider';
 import { fetchAllMarkets } from '../../lib/onchain/reads';
 import { createBet, resolveBet, setCreatorApproval } from '../../lib/onchain/adminWrites';
-import { MarketData } from '../../data/markets';
 import { formatResolutionDate } from '../../utils/formatters';
+import { MarketData } from '../../data/markets';
+import { getFaucetFeeBalance, withdrawFaucetFees } from '../../lib/onchain/writes';
+import { TOKEN_ADDRESS } from '../../lib/constants';
+import { formatEther } from 'viem';
 
 const AdminPage: React.FC = () => {
     const router = useRouter();
@@ -18,6 +21,8 @@ const AdminPage: React.FC = () => {
     const [creating, setCreating] = useState(false);
     const [approving, setApproving] = useState(false);
     const [resolvingId, setResolvingId] = useState<string | null>(null);
+    const [feeBalance, setFeeBalance] = useState<bigint>(0n);
+    const [withdrawingFees, setWithdrawingFees] = useState(false);
 
     const [form, setForm] = useState({
         title: '',
@@ -47,7 +52,20 @@ const AdminPage: React.FC = () => {
 
     useEffect(() => {
         loadMarkets();
+        getFaucetFeeBalance().then(setFeeBalance).catch(() => setFeeBalance(0n));
     }, []);
+
+    const handleWithdrawFees = async () => {
+        if (!isOwner || !walletAddress) return;
+        setWithdrawingFees(true);
+        try {
+            await withdrawFaucetFees(walletAddress as `0x${string}`);
+            const balance = await getFaucetFeeBalance();
+            setFeeBalance(balance);
+        } finally {
+            setWithdrawingFees(false);
+        }
+    };
 
     const handleCreate = async () => {
         if (!isOwner) return;
@@ -129,6 +147,15 @@ const AdminPage: React.FC = () => {
         <>
             <Header onNavigate={(page) => (page === 'landing' ? router.push('/') : router.push('/markets'))} currentPage="markets" />
             <div className={styles.page}>
+                <div className={styles.card}>
+                    <div className={styles.sectionTitle}>Faucet Fee Treasury</div>
+                    <div className={styles.muted}>Token contract: {TOKEN_ADDRESS}</div>
+                    <div className={styles.treasuryAmount}>{formatEther(feeBalance)} RITUAL</div>
+                    <button className={styles.button} onClick={handleWithdrawFees} disabled={withdrawingFees || feeBalance === 0n}>
+                        {withdrawingFees ? 'Withdrawing...' : 'Withdraw faucet fees'}
+                    </button>
+                </div>
+
                 <div className={styles.card}>
                     <div className={styles.sectionTitle}>Create Bet</div>
                     <div className={styles.formGrid}>

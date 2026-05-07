@@ -71,6 +71,14 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         fetchTokenBalance();
     }, [fetchTokenBalance]);
 
+    React.useEffect(() => {
+        const handleRefresh = () => {
+            fetchTokenBalance();
+        };
+        window.addEventListener('skyusd:balance-refresh', handleRefresh);
+        return () => window.removeEventListener('skyusd:balance-refresh', handleRefresh);
+    }, [fetchTokenBalance]);
+
     const handleBalanceClick = React.useCallback(() => {
         setBalanceDropdownOpen((prev) => !prev);
     }, []);
@@ -90,6 +98,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
             await dripUsdl();
             showToast(`Successfully received 1000 ${TOKEN_SYMBOL}!`, 'success');
             await fetchTokenBalance();
+            window.dispatchEvent(new Event('skyusd:balance-refresh'));
             setBalanceDropdownOpen(false);
         } catch (error: unknown) {
             console.error('Failed to drip token - detailed error:', error);
