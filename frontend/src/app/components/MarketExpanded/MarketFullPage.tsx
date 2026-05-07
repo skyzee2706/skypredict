@@ -11,6 +11,7 @@ import ConnectWalletPrompt from '../Wallet/ConnectWalletPrompt';
 import { formatVolume, formatAddress, formatResolutionDate } from '../../../utils/formatters';
 import CopyIcon from '../Shared/CopyIcon';
 import ResolutionRules from '../Shared/ResolutionRules';
+import { useLiveScore } from '../../../hooks/useLiveScore';
 
 interface MarketFullPageProps {
     onBack: () => void;
@@ -49,6 +50,12 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
 
     const { isConnected, walletAddress } = useWallet();
     const { showToast } = useToast();
+    const isSportsMarket = market?.category === 'SPORTS' || type === 'sport';
+    const { liveScore, loading: liveScoreLoading } = useLiveScore(
+        isSportsMarket ? market?.sideAName : undefined,
+        isSportsMarket ? market?.sideBName : undefined,
+        market?.deadlineDate ?? market?.deadline
+    );
 
     // Get user status for finalized markets
     const [userStatus, setUserStatus] = React.useState<UserMarketStatus | null>(null);
@@ -153,6 +160,44 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
     const renderTitle = () => (
         <h1 className={styles.title}>{marketTitle}</h1>
     );
+
+    const renderLiveScoreCard = () => {
+        if (!isSportsMarket) return null;
+
+        const kickoffText = formatResolutionDate(liveScore?.utcDate ?? market?.deadlineDate ?? market?.deadline);
+        const status = liveScore?.status ?? 'SCHEDULED';
+        const isNotStarted = status === 'TIMED' || status === 'SCHEDULED' || !liveScore;
+        const statusLabel = liveScoreLoading
+            ? 'Loading score'
+            : isNotStarted
+                ? 'Not Started'
+                : liveScore?.elapsed || status;
+        const homeGoals = liveScore?.homeGoals ?? 0;
+        const awayGoals = liveScore?.awayGoals ?? 0;
+
+        return (
+            <section className={styles.liveScoreCard} aria-label="Live match score">
+                <div className={styles.liveScoreHeader}>
+                    <span className={styles.liveScoreEyebrow}>Match Center</span>
+                    <span className={`${styles.liveStatusPill} ${!isNotStarted ? styles.liveStatusPillActive : ''}`}>
+                        {statusLabel}
+                    </span>
+                </div>
+                <div className={styles.scoreboardRow}>
+                    <div className={styles.scoreTeam}>
+                        <span className={styles.teamName}>{liveScore?.homeTeam || market?.sideAName || 'Home'}</span>
+                        <span className={styles.scoreValue}>{isNotStarted ? '—' : homeGoals}</span>
+                    </div>
+                    <div className={styles.scoreDivider}>vs</div>
+                    <div className={styles.scoreTeam}>
+                        <span className={styles.teamName}>{liveScore?.awayTeam || market?.sideBName || 'Away'}</span>
+                        <span className={styles.scoreValue}>{isNotStarted ? '—' : awayGoals}</span>
+                    </div>
+                </div>
+                <div className={styles.kickoffMeta}>Kickoff: {kickoffText || '—'}</div>
+            </section>
+        );
+    };
 
     const renderProgressBar = () => {
         if (market?.category === 'SPORTS') {
@@ -354,8 +399,9 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
                 <div className={styles.mainContent}>
                     {renderTopBar()}
                     {isActive && renderMetaRow()}
-                    {renderStateRow()}
                     {renderTitle()}
+                    {renderLiveScoreCard()}
+                    {renderStateRow()}
 
                     {/* Truth block for resolved/undetermined markets comes before progress bar */}
                     {(state === 'RESOLVED' || state === 'UNDETERMINED') && renderTruthBlock()}

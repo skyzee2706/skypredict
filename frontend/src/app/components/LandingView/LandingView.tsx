@@ -72,9 +72,9 @@ const LandingView: React.FC = () => {
     const sportCount = activeMarkets.filter(m => m.type === 'sport').length;
     const cryptoCount = activeMarkets.filter(m => m.type === 'crypto').length;
 
-    // Trending: top 3 by volume per category. Reuses cached batched data so the
-    // landing page stays seamless like the Markets page.
-    const sorted = [...allMarkets].sort((a, b) => b.volume - a.volume);
+    // Trending: top 3 active markets by volume per category. Reuses cached
+    // batched data so resolved/resolving markets never appear here.
+    const sorted = [...activeMarkets].sort((a, b) => b.volume - a.volume);
     const trendingCrypto = sorted.filter(m => m.type === 'crypto').slice(0, 3);
     const trendingSport = sorted.filter(m => m.type === 'sport').slice(0, 3);
 

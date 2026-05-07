@@ -60,28 +60,33 @@ export default function MarketsPage() {
         });
     }, [allMarkets, activeMarketState, now]);
 
-    // Find selected market in current markets or fall back to stored data
+    // Find selected market in current markets or fall back only when it still belongs to the active tab
     const selectedMarket = React.useMemo((): MarketData | null => {
         if (!selectedMarketId) return null;
 
-        // Try to find in current markets (for updated data)
-        const currentMarket = currentMarkets.find(m => m.id === selectedMarketId);
-        if (currentMarket) {
-            return currentMarket;
-        }
-
-        // Fall back to stored market data (maintains panel persistence when switching states)
-        return selectedMarketData;
-    }, [selectedMarketId, currentMarkets, selectedMarketData]);
-
-    // Update stored market data when we find the market in current state
-    React.useEffect(() => {
-        if (selectedMarket && selectedMarket.id === selectedMarketId) {
-            if (!selectedMarketData || selectedMarketData.contractId !== selectedMarket.contractId) {
-                setSelectedMarketData(selectedMarket);
+        const latestMarket = allMarkets.find(m => m.id === selectedMarketId);
+        if (latestMarket) {
+            if (activeMarketState === 'UNDETERMINED') {
+                const deadline = Number(latestMarket.deadline);
+                return latestMarket.state !== 'RESOLVED' && deadline > 0 && deadline < now ? latestMarket : null;
             }
+            return latestMarket.state === activeMarketState ? latestMarket : null;
         }
-    }, [selectedMarket, selectedMarketId, selectedMarketData]);
+
+        return selectedMarketData?.state === activeMarketState ? selectedMarketData : null;
+    }, [selectedMarketId, allMarkets, activeMarketState, now, selectedMarketData]);
+
+    // Keep stored market data fresh and close the side panel when it leaves the current state
+    React.useEffect(() => {
+        if (!selectedMarketId) return;
+        const latestMarket = allMarkets.find(m => m.id === selectedMarketId);
+        if (!latestMarket) return;
+
+        setSelectedMarketData(latestMarket);
+        if (activeMarketState !== 'UNDETERMINED' && latestMarket.state !== activeMarketState) {
+            setSelectedMarketId(null);
+        }
+    }, [selectedMarketId, allMarkets, activeMarketState]);
 
     const filteredMarkets = currentMarkets
         .filter(market => {
@@ -107,6 +112,7 @@ export default function MarketsPage() {
                 if (page === 'landing') router.push('/');
                 else if (page === 'markets') router.push('/markets');
                 else if (page === 'portfolio') router.push('/portfolio');
+                else if (page === 'leaderboard') router.push('/leaderboard');
                 else if (page === 'faucet') router.push('/faucet');
             }} currentPage="markets" />
 

@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '../../components/Header/Header';
 import MarketFullPage from '../../components/MarketExpanded/MarketFullPage';
 import { MarketData, MarketState } from '../../../data/markets';
-import { fetchMarketsByStatus } from '../../../lib/onchain/reads';
+import { fetchMarketInfo, fetchMarketsByStatus } from '../../../lib/onchain/reads';
 import { isLegitBet } from '../../../lib/onchain/writes';
 import styles from '../../page.module.css';
 
@@ -32,26 +32,27 @@ export default function MarketPage() {
             setIsInvalidBet(false);
             try {
                 const target = (id || '').toLowerCase();
-
-                // First check if the provided ID is a valid Ethereum address (potential contract address)
                 const isAddress = /^0x[a-fA-F0-9]{40}$/.test(target);
 
                 if (isAddress) {
-                    // Validate bet legitimacy if it's a contract address
-                    try {
-                        const isValid = await isLegitBet(target as `0x${string}`);
-                        if (!isValid) {
-                            if (!cancelled) {
-                                setIsInvalidBet(true);
-                                setMarket(null);
-                                setLoading(false);
-                            }
-                            return;
+                    const address = target as `0x${string}`;
+                    const [marketInfo, validBet] = await Promise.all([
+                        fetchMarketInfo(address),
+                        isLegitBet(address).catch((error) => {
+                            console.error('Error validating bet legitimacy:', error);
+                            return true;
+                        })
+                    ]);
+
+                    if (!cancelled) {
+                        if (!validBet || !marketInfo?.title) {
+                            setIsInvalidBet(true);
+                            setMarket(null);
+                        } else {
+                            setMarket(marketInfo);
                         }
-                    } catch (error) {
-                        console.error('Error validating bet legitimacy:', error);
-                        // If validation fails, continue with normal search (fallback)
                     }
+                    return;
                 }
 
                 const statuses: MarketState[] = ['ACTIVE', 'RESOLVING', 'RESOLVED', 'UNDETERMINED'];
@@ -86,6 +87,8 @@ export default function MarketPage() {
             <Header onNavigate={(page) => {
                 if (page === 'landing') router.push('/');
                 else if (page === 'markets') router.push('/markets');
+                else if (page === 'portfolio') router.push('/portfolio');
+                else if (page === 'leaderboard') router.push('/leaderboard');
                 else if (page === 'faucet') router.push('/faucet');
             }} currentPage="markets" />
             <main style={{ display: 'flex', justifyContent: 'center', width: '100%', padding: '0 16px' }}>

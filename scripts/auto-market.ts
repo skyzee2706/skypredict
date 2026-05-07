@@ -38,7 +38,11 @@ const MARKET_ABI = [
   'function resolveWithCustomPrice(uint256 price) external',
   'function resolveWithOutcome(uint8 outcome,uint256 settlementValue) external',
   'function question() external view returns (string)',
-  'function marketType() external view returns (string)'
+  'function marketType() external view returns (string)',
+  'function sideAName() external view returns (string)',
+  'function drawName() external view returns (string)',
+  'function sideBName() external view returns (string)',
+  'function strikePrice() external view returns (uint256)'
 ];
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
@@ -322,6 +326,103 @@ async function fetchMatchResult(fixture: TrackedFixture): Promise<{ status: stri
   };
 }
 
+function normalizeQuestion(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+async function findFixtureByTeams(homeTeam: string, awayTeam: string, kickoff: number): Promise<TrackedFixture | null> {
+  const from = dateOnly(kickoff - 86400);
+  const to = dateOnly(kickoff + 86400);
+  const data = await footballApi(`/matches?dateFrom=${from}&dateTo=${to}`);
+  const matches = data?.matches || [];
+  const homeNorm = normalizeQuestion(homeTeam);
+  const awayNorm = normalizeQuestion(awayTeam);
+
+  const match = matches.find((item: any) => {
+    const itemHome = normalizeQuestion(String(item.homeTeam?.name || ''));
+    const itemAway = normalizeQuestion(String(item.awayTeam?.name || ''));
+    const itemKickoff = Math.floor(Date.parse(item.utcDate) / 1000);
+    return itemHome === homeNorm && itemAway === awayNorm && Math.abs(itemKickoff - kickoff) <= 6 * 60 * 60;
+  });
+
+  if (!match) return null;
+  return {
+    fixtureId: Number(match.id),
+    competition: String(match.competition?.code || match.competition?.id || 'FOOTBALL').toUpperCase(),
+    homeTeam: match.homeTeam?.name || homeTeam,
+    awayTeam: match.awayTeam?.name || awayTeam,
+    kickoff: Math.floor(Date.parse(match.utcDate) / 1000),
+    status: match.status
+  };
+}
+
+async function syncExistingSportsMarkets(state: SportsState, allMarkets: string[]) {
+  const stateByAddress = new Map(
+    Object.entries(state)
+      .filter(([, tracked]) => tracked.marketAddress)
+      .map(([key, tracked]) => [tracked.marketAddress!.toLowerCase(), key])
+  );
+
+  for (const addr of allMarkets.slice(-1000)) {
+    try {
+      const market = new ethers.Contract(addr, MARKET_ABI, provider);
+      const [typeRaw, resolved, question, endTimeRaw] = await Promise.all([
+        market.marketType().catch(() => 'CRYPTO'),
+        market.resolved(),
+        market.question(),
+        market.endTime()
+      ]);
+
+      if (String(typeRaw).toUpperCase() !== 'SPORTS') continue;
+
+      const existingKey = stateByAddress.get(addr.toLowerCase());
+      if (resolved) {
+        if (existingKey) {
+          console.log(`[SPORT] ${question} is already resolved on-chain, removing from database...`);
+          delete state[existingKey];
+          stateByAddress.delete(addr.toLowerCase());
+        }
+        continue;
+      }
+
+      if (existingKey) continue;
+
+      const [sideA, sideB, strikePriceRaw] = await Promise.all([
+        market.sideAName().catch(() => ''),
+        market.sideBName().catch(() => ''),
+        market.strikePrice().catch(() => 0n)
+      ]);
+      const kickoff = Number(endTimeRaw);
+      const fixtureFromApi = sideA && sideB ? await findFixtureByTeams(String(sideA), String(sideB), kickoff) : null;
+      const fixtureId = fixtureFromApi?.fixtureId || Number(strikePriceRaw);
+
+      if (!fixtureId) {
+        console.warn(`[SPORT] Cannot backfill ${question}; fixture id is missing.`);
+        continue;
+      }
+
+      const key = String(fixtureId);
+      if (state[key]?.marketAddress) continue;
+
+      state[key] = {
+        fixtureId,
+        competition: fixtureFromApi?.competition || 'FOOTBALL',
+        homeTeam: fixtureFromApi?.homeTeam || String(sideA),
+        awayTeam: fixtureFromApi?.awayTeam || String(sideB),
+        kickoff: fixtureFromApi?.kickoff || kickoff,
+        status: fixtureFromApi?.status || 'SCHEDULED',
+        marketAddress: addr,
+        createdAt: state[key]?.createdAt || new Date().toISOString()
+      };
+      stateByAddress.set(addr.toLowerCase(), key);
+      console.log(`[SPORT] Backfilled existing market into database: ${question} -> ${addr}`);
+    } catch (err: any) {
+      console.warn(`[SPORT] Failed to inspect market ${addr}:`, err?.shortMessage || err?.message || err);
+    }
+  }
+}
+
+
 async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[]) {
   const state = readSportsState();
   const fixtures = await fetchUpcomingBigFixtures();
@@ -332,20 +433,36 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
       delete state[key];
     }
   }
+
+  await syncExistingSportsMarkets(state, allMarkets);
   writeSportsState(state);
 
-  const existingQuestions = new Set<string>();
-  for (const addr of allMarkets.slice(-800)) {
+  const existingQuestions = new Map<string, string>();
+  for (const addr of allMarkets.slice(-1000)) {
     try {
       const m = new ethers.Contract(addr, MARKET_ABI, provider);
-      existingQuestions.add(String(await m.question()).toLowerCase());
+      const [question, type, resolved] = await Promise.all([
+        m.question(),
+        m.marketType().catch(() => 'CRYPTO'),
+        m.resolved()
+      ]);
+      if (String(type).toUpperCase() === 'SPORTS' && !resolved) {
+        existingQuestions.set(normalizeQuestion(String(question)), addr);
+      }
     } catch { }
   }
 
   for (const fixture of fixtures) {
     const key = String(fixture.fixtureId);
     const question = `${fixture.homeTeam} vs ${fixture.awayTeam}`;
-    if (state[key]?.marketAddress || existingQuestions.has(question.toLowerCase())) continue;
+    const existingAddress = existingQuestions.get(normalizeQuestion(question));
+    if (state[key]?.marketAddress) continue;
+    if (existingAddress) {
+      state[key] = { ...fixture, marketAddress: existingAddress, createdAt: new Date().toISOString() };
+      console.log(`[SPORT] Linked existing market to database: ${question} -> ${existingAddress}`);
+      writeSportsState(state);
+      continue;
+    }
     await sendCreateSportsMarketTx(factory, fixture);
     const after = (await factory.getAllMarkets()) as string[];
     state[key] = { ...fixture, marketAddress: after[after.length - 1], createdAt: new Date().toISOString() };
@@ -356,11 +473,12 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
     if (!tracked.marketAddress || tracked.resolvedAt) continue;
     const now = Math.floor(Date.now() / 1000);
     
-    // First check is 110 minutes after kickoff, or whatever dynamic nextCheckAt is set
-    const checkTime = tracked.nextCheckAt || (tracked.kickoff + 110 * 60);
+    // First check is 115 minutes after kickoff. If the match is not FT yet,
+    // retry every 10 minutes until football-data.org returns FINISHED.
+    const checkTime = tracked.nextCheckAt || (tracked.kickoff + 115 * 60);
     if (now < checkTime) continue;
 
-    console.log(`[SPORT] Checking status for ${tracked.homeTeam} vs ${tracked.awayTeam}...`);
+    console.log(`[SPORT] Checking status for ${tracked.homeTeam} vs ${tracked.awayTeam} (kickoff +115m, then 10m retries until FT)...`);
     const result = await fetchMatchResult(tracked);
     
     if (!result) {
@@ -448,7 +566,7 @@ async function resolveMarkets() {
     // once a daily market is resolved and no active market exists for the next
     // midnight window, the scheduler deploys a fresh daily market.
     const types = [
-      { id: 'D' as const, label: 'Daily', getET: nextMidnightUTC, buffer: 18000 }
+      { id: 'D' as const, label: 'Daily', getET: nextMidnightUTC, buffer: 3 * 60 * 60 }
     ];
 
     for (const ticker of TICKERS) {

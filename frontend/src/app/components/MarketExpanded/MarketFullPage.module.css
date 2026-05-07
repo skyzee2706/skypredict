@@ -71,6 +71,101 @@
     color: var(--foreground);
 }
 
+.liveScoreCard {
+    position: relative;
+    overflow: hidden;
+    margin: -8px 0 22px;
+    padding: 18px;
+    border-radius: 18px;
+    border: 1px solid color-mix(in srgb, var(--card-border-hover) 70%, transparent);
+    background:
+        radial-gradient(circle at 18% 15%, color-mix(in srgb, var(--success) 22%, transparent), transparent 34%),
+        linear-gradient(135deg, color-mix(in srgb, var(--section-bg) 86%, transparent), color-mix(in srgb, var(--card-bg) 94%, transparent));
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18), var(--shadow-inset);
+}
+
+.liveScoreHeader,
+.scoreboardRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+}
+
+.liveScoreHeader {
+    margin-bottom: 14px;
+}
+
+.liveScoreEyebrow {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.liveStatusPill {
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--card-border-hover);
+    background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 900;
+}
+
+.liveStatusPillActive {
+    border-color: color-mix(in srgb, var(--success) 62%, var(--card-border));
+    background: color-mix(in srgb, var(--success) 16%, var(--surface-elevated));
+    color: color-mix(in srgb, var(--success) 86%, #ffffff);
+    box-shadow: 0 0 24px color-mix(in srgb, var(--success) 18%, transparent);
+}
+
+.scoreTeam {
+    flex: 1;
+    display: grid;
+    gap: 8px;
+}
+
+.scoreTeam:last-child {
+    text-align: right;
+}
+
+.teamName {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--foreground);
+}
+
+.scoreValue {
+    font-size: clamp(34px, 6vw, 56px);
+    line-height: 0.95;
+    font-weight: 950;
+    letter-spacing: -0.06em;
+    color: var(--foreground);
+}
+
+.scoreDivider {
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--card-border);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+    background: color-mix(in srgb, var(--card-bg) 84%, transparent);
+}
+
+.kickoffMeta {
+    margin-top: 14px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-weight: 700;
+}
+
 .progressSection {
     margin-bottom: 24px;
 }

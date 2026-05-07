@@ -177,8 +177,8 @@ export function useFactoryMarkets() {
     functionName: 'getAllMarkets',
     query: {
       enabled,
-      staleTime: 30_000,
-      refetchInterval: 30_000,
+      staleTime: 10_000,
+      refetchInterval: 10_000,
       refetchOnWindowFocus: false
     }
   });
@@ -208,8 +208,8 @@ export function useBatchedMarkets(addresses: `0x${string}`[]) {
     allowFailure: true,
     query: {
       enabled: addresses.length > 0,
-      staleTime: 30_000,
-      refetchInterval: 30_000,
+      staleTime: 10_000,
+      refetchInterval: 10_000,
       refetchOnWindowFocus: false
     }
   });

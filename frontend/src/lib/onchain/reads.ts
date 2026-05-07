@@ -59,7 +59,7 @@ function isSportsMarket(question: string, marketTypeRaw: string): boolean {
   return false;
 }
 
-async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<MarketData> {
+export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<MarketData> {
   // Read core fields (always present in both old and new contracts)
   const [
     question,

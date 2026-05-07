@@ -53,6 +53,8 @@ export default function FaucetPage() {
                 onNavigate={(page) => {
                     if (page === 'landing') router.push('/');
                     else if (page === 'markets') router.push('/markets');
+                    else if (page === 'portfolio') router.push('/portfolio');
+                    else if (page === 'leaderboard') router.push('/leaderboard');
                     else if (page === 'faucet') router.push('/faucet');
                 }}
                 currentPage="faucet"

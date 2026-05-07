@@ -11,6 +11,8 @@ import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useBatchedMarkets, useBatchedUserPositions, useFactoryMarkets } from "@/hooks/useMarketBatches";
 import { useToast } from "../providers/ToastProvider";
 
+const HISTORY_PAGE_SIZE = 20;
+
 type CachedPortfolioResponse = {
     marketAddresses: `0x${string}`[];
     activity: Array<{
@@ -32,7 +34,7 @@ type PortfolioPosition = {
     claimed: boolean;
     canClaim: boolean;
     userWon: boolean;
-    potentialWinnings: number;
+    positionValue: number;
 };
 
 function formatAmount(value: number) {
@@ -57,13 +59,17 @@ export default function PortfolioPage() {
     const { positions: batchedPositions, isLoading: positionsLoading } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
     const [positions, setPositions] = useState<PortfolioPosition[]>([]);
     const [claiming, setClaiming] = useState<string | null>(null);
+    const [historyPage, setHistoryPage] = useState(1);
 
     const userStats = useMemo(() => {
         const volume = positions.reduce((sum, position) => sum + position.total, 0);
-        const claimable = positions.reduce((sum, position) => sum + (position.canClaim ? position.potentialWinnings : 0), 0);
+        const realizedOrClaimableValue = positions.reduce((sum, position) => sum + position.positionValue, 0);
+        const pnl = realizedOrClaimableValue - volume;
+        const pnlPercent = volume > 0 ? (pnl / volume) * 100 : 0;
         return {
             volume,
-            pnl: claimable - volume,
+            pnl,
+            pnlPercent,
             historyCount: cachedPortfolio?.activity.length || positions.length,
         };
     }, [cachedPortfolio, positions]);
@@ -125,6 +131,8 @@ export default function PortfolioPage() {
                     canClaim = userWon && !position.claimed;
                 }
 
+                const positionValue = userWon ? position.total : 0;
+
                 return {
                     market,
                     sideA: position.onSideA,
@@ -134,7 +142,7 @@ export default function PortfolioPage() {
                     claimed: position.claimed,
                     canClaim,
                     userWon,
-                    potentialWinnings: canClaim ? position.total : 0,
+                    positionValue,
                 } as PortfolioPosition;
             })
             .filter((row): row is PortfolioPosition => row !== null);
@@ -163,7 +171,20 @@ export default function PortfolioPage() {
         }
     };
 
-    const sortedPositions = [...positions].sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline));
+    const sortedPositions = useMemo(
+        () => [...positions].sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline)),
+        [positions]
+    );
+    const totalHistoryPages = Math.max(1, Math.ceil(sortedPositions.length / HISTORY_PAGE_SIZE));
+    const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
+    const paginatedPositions = sortedPositions.slice(
+        (currentHistoryPage - 1) * HISTORY_PAGE_SIZE,
+        currentHistoryPage * HISTORY_PAGE_SIZE
+    );
+
+    useEffect(() => {
+        setHistoryPage(1);
+    }, [address, sortedPositions.length]);
 
     return (
         <>
@@ -171,6 +192,7 @@ export default function PortfolioPage() {
                 onNavigate={(page) => {
                     if (page === "markets") router.push("/markets");
                     else if (page === "portfolio") router.push("/portfolio");
+                    else if (page === "leaderboard") router.push("/leaderboard");
                     else if (page === "faucet") router.push("/faucet");
                     else router.push("/");
                 }}
@@ -198,6 +220,9 @@ export default function PortfolioPage() {
                             <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>PNL</p>
                             <p style={{ color: userStats.pnl < 0 ? "#fb7185" : "#22c55e", fontSize: "28px", fontWeight: 950, marginTop: "8px", fontFamily: "monospace" }}>
                                 {`${userStats.pnl < 0 ? "-" : "+"}${formatAmount(Math.abs(userStats.pnl))}`}
+                            </p>
+                            <p style={{ color: userStats.pnlPercent < 0 ? "#fb7185" : "#22c55e", fontSize: "13px", fontWeight: 900, marginTop: "4px", fontFamily: "monospace" }}>
+                                {`${userStats.pnlPercent < 0 ? "-" : "+"}${Math.abs(userStats.pnlPercent).toFixed(2)}%`}
                             </p>
                         </div>
                         <div style={{ padding: "18px", borderRadius: "20px", border: "1px solid rgba(99,102,241,0.28)", background: "linear-gradient(135deg,rgba(99,102,241,0.14),rgba(255,255,255,0.04))" }}>
@@ -229,33 +254,64 @@ export default function PortfolioPage() {
                     )}
 
                     {isConnected && !isLoading && sortedPositions.length > 0 && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                            {sortedPositions.map((position) => {
-                                const market = position.market;
-                                return (
-                                    <div key={market.contractId} style={{ padding: "18px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-card)", display: "grid", gridTemplateColumns: "1.5fr 1fr auto", gap: "16px", alignItems: "center" }}>
-                                        <div>
-                                            <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "6px" }}>{market.title}</p>
-                                            <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-                                                {market.category} · {market.state === "RESOLVED" ? "Finalized" : market.state} · Winner: {market.resolvedOutcome || "-"}
-                                            </p>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                                <div>
+                                    <h2 style={{ color: "var(--text-primary)", fontSize: "20px", fontWeight: 950 }}>Trading History</h2>
+                                    <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px" }}>
+                                        Showing {((currentHistoryPage - 1) * HISTORY_PAGE_SIZE) + 1}-{Math.min(currentHistoryPage * HISTORY_PAGE_SIZE, sortedPositions.length)} of {sortedPositions.length} positions
+                                    </p>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                    <button
+                                        onClick={() => setHistoryPage((page) => Math.max(1, page - 1))}
+                                        disabled={currentHistoryPage === 1}
+                                        style={{ border: "1px solid var(--border)", borderRadius: "12px", padding: "10px 14px", fontWeight: 900, cursor: currentHistoryPage === 1 ? "not-allowed" : "pointer", color: currentHistoryPage === 1 ? "var(--text-muted)" : "var(--text-primary)", background: "var(--bg-card)" }}
+                                    >
+                                        Prev
+                                    </button>
+                                    <span style={{ color: "var(--text-muted)", fontSize: "13px", fontWeight: 900 }}>
+                                        Page {currentHistoryPage} / {totalHistoryPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setHistoryPage((page) => Math.min(totalHistoryPages, page + 1))}
+                                        disabled={currentHistoryPage === totalHistoryPages}
+                                        style={{ border: "1px solid var(--border)", borderRadius: "12px", padding: "10px 14px", fontWeight: 900, cursor: currentHistoryPage === totalHistoryPages ? "not-allowed" : "pointer", color: currentHistoryPage === totalHistoryPages ? "var(--text-muted)" : "var(--text-primary)", background: "var(--bg-card)" }}
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "980px", overflowY: "auto", paddingRight: "6px" }}>
+                                {paginatedPositions.map((position) => {
+                                    const market = position.market;
+                                    return (
+                                        <div key={market.contractId} style={{ padding: "18px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-card)", display: "grid", gridTemplateColumns: "1.5fr 1fr auto", gap: "16px", alignItems: "center" }}>
+                                            <div>
+                                                <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "6px" }}>{market.title}</p>
+                                                <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
+                                                    {market.category} · {market.state === "RESOLVED" ? "Finalized" : market.state} · Winner: {market.resolvedOutcome || "-"}
+                                                </p>
+                                            </div>
+                                            <div style={{ color: "var(--text-muted)", fontSize: "12px", lineHeight: 1.7 }}>
+                                                <div>Total Bet: <b style={{ color: "var(--text-primary)" }}>{formatAmount(position.total)} SkyUSD</b></div>
+                                                <div>{market.sideAName || "YES"}: {formatAmount(position.sideA)} · Draw: {formatAmount(position.draw)} · {market.sideBName || "NO"}: {formatAmount(position.sideB)}</div>
+                                                {position.canClaim && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable: {formatAmount(position.positionValue)} SkyUSD</div>}
+                                                {position.claimed && position.userWon && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed win: +{formatAmount(position.positionValue)} SkyUSD</div>}
+                                                {position.claimed && !position.userWon && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Already claimed</div>}
+                                            </div>
+                                            <button
+                                                onClick={() => handleClaim(position)}
+                                                disabled={!position.canClaim || claiming === market.contractId}
+                                                style={{ border: "0", borderRadius: "14px", padding: "12px 16px", fontWeight: 900, cursor: position.canClaim ? "pointer" : "not-allowed", color: position.canClaim ? "white" : "var(--text-muted)", background: position.canClaim ? "linear-gradient(135deg,#22c55e,#16a34a)" : "rgba(255,255,255,0.06)" }}
+                                            >
+                                                {claiming === market.contractId ? "Claiming…" : position.canClaim ? "Claim" : position.claimed ? "Claimed" : "Not claimable"}
+                                            </button>
                                         </div>
-                                        <div style={{ color: "var(--text-muted)", fontSize: "12px", lineHeight: 1.7 }}>
-                                            <div>Total Bet: <b style={{ color: "var(--text-primary)" }}>{formatAmount(position.total)} SkyUSD</b></div>
-                                            <div>{market.sideAName || "YES"}: {formatAmount(position.sideA)} · Draw: {formatAmount(position.draw)} · {market.sideBName || "NO"}: {formatAmount(position.sideB)}</div>
-                                            {position.canClaim && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable: {formatAmount(position.potentialWinnings)} SkyUSD</div>}
-                                            {position.claimed && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Already claimed</div>}
-                                        </div>
-                                        <button
-                                            onClick={() => handleClaim(position)}
-                                            disabled={!position.canClaim || claiming === market.contractId}
-                                            style={{ border: "0", borderRadius: "14px", padding: "12px 16px", fontWeight: 900, cursor: position.canClaim ? "pointer" : "not-allowed", color: position.canClaim ? "white" : "var(--text-muted)", background: position.canClaim ? "linear-gradient(135deg,#22c55e,#16a34a)" : "rgba(255,255,255,0.06)" }}
-                                        >
-                                            {claiming === market.contractId ? "Claiming…" : position.canClaim ? "Claim" : position.claimed ? "Claimed" : "Not claimable"}
-                                        </button>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </div>
