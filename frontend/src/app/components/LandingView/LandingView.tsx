@@ -270,7 +270,7 @@ const LandingView: React.FC = () => {
                         <div className={styles.footerLinkCol}>
                             <div className={styles.footerColTitle}>Resources</div>
                             <span className={styles.footerLinkDisabled}>Documentation <span className={styles.comingSoon}>Soon</span></span>
-                            <span className={styles.footerLinkDisabled}>Whitepaper <span className={styles.comingSoon}>Soon</span></span>
+                            <a href="https://whitepaper.skypredict.app/" target="_blank" rel="noopener noreferrer" className={styles.footerLink}>Whitepaper</a>
                             <span className={styles.footerLinkDisabled}>API Reference <span className={styles.comingSoon}>Soon</span></span>
                         </div>
                         <div className={styles.footerLinkCol}>
