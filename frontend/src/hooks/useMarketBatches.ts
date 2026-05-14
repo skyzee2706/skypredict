@@ -170,7 +170,7 @@ function buildMarketData(address: `0x${string}`, values: unknown[]): MarketData 
 
 export function useFactoryMarkets() {
   const enabled = Boolean(FACTORY_ADDRESS && FACTORY_ADDRESS !== ZERO_FACTORY);
-  const { data, isLoading, isFetching, error, refetch } = useReadContract({
+  const { data, isLoading, isFetching, isFetched, error, refetch } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: FACTORY_ABI,
     functionName: 'getAllMarkets',
@@ -178,7 +178,9 @@ export function useFactoryMarkets() {
       enabled,
       staleTime: 10_000,
       refetchInterval: 10_000,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      retry: 3,
+      retryDelay: 1_000
     }
   });
 
@@ -186,6 +188,7 @@ export function useFactoryMarkets() {
     addresses: (data as `0x${string}`[] | undefined) ?? [],
     isLoading,
     isFetching,
+    isFetched,
     error,
     refetch
   };
@@ -202,14 +205,16 @@ export function useBatchedMarkets(addresses: `0x${string}`[]) {
     );
   }, [addresses]);
 
-  const { data, isLoading, isFetching, error, refetch } = useReadContracts({
+  const { data, isLoading, isFetching, isFetched, error, refetch } = useReadContracts({
     contracts,
     allowFailure: true,
     query: {
       enabled: addresses.length > 0,
       staleTime: 10_000,
       refetchInterval: 10_000,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      retry: 3,
+      retryDelay: 1_000
     }
   });
 
@@ -228,7 +233,7 @@ export function useBatchedMarkets(addresses: `0x${string}`[]) {
       .sort((a, b) => Number(a.deadline) - Number(b.deadline));
   }, [addresses, data]);
 
-  return { markets, isLoading, isFetching, error, refetch };
+  return { markets, isLoading, isFetching, isFetched, error, refetch };
 }
 
 export interface BatchedUserPosition {
@@ -251,14 +256,16 @@ export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${
     }));
   }, [addresses, user]);
 
-  const { data, isLoading, isFetching, error, refetch } = useReadContracts({
+  const { data, isLoading, isFetching, isFetched, error, refetch } = useReadContracts({
     contracts,
     allowFailure: true,
     query: {
       enabled: addresses.length > 0 && Boolean(user),
       staleTime: 30_000,
       refetchInterval: 30_000,
-      refetchOnWindowFocus: false
+      refetchOnWindowFocus: false,
+      retry: 3,
+      retryDelay: 1_000
     }
   });
 
@@ -288,5 +295,5 @@ export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${
       .filter((position): position is BatchedUserPosition => position !== null);
   }, [addresses, data]);
 
-  return { positions, isLoading, isFetching, error, refetch };
+  return { positions, isLoading, isFetching, isFetched, error, refetch };
 }

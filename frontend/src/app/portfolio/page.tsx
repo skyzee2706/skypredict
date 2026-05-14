@@ -49,18 +49,18 @@ export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const { showToast } = useToast();
-    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching } = useFactoryMarkets();
+    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets();
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const liveAddresses = useMemo(() => {
         const cached = cachedPortfolio?.marketAddresses ?? [];
         return cached.length > 0 ? cached : addresses;
     }, [addresses, cachedPortfolio]);
-    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
+    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
     const positionMarketAddresses = useMemo(
         () => batchedPositions.map((position) => position.marketAddress),
         [batchedPositions]
     );
-    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching } = useBatchedMarkets(positionMarketAddresses);
+    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses);
     const [positions, setPositions] = useState<PortfolioPosition[]>([]);
     const [claiming, setClaiming] = useState<string | null>(null);
     const [historyPage, setHistoryPage] = useState(1);
@@ -143,10 +143,10 @@ export default function PortfolioPage() {
         // button API stable without reintroducing direct per-market RPC loops.
     }, []);
 
-    const hasLoadedFactory = !factoryLoading && !factoryFetching;
-    const hasCheckedPositions = isConnected && liveAddresses.length > 0 && !positionsLoading && !positionsFetching;
+    const hasLoadedFactory = factoryFetched && !factoryLoading && !factoryFetching;
+    const hasCheckedPositions = isConnected && liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching;
     const needsMarketDetails = batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = !needsMarketDetails || (!marketsLoading && !marketsFetching);
+    const hasLoadedPositionMarkets = !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
     const isLoading = isConnected && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
     const handleClaim = async (position: PortfolioPosition) => {
