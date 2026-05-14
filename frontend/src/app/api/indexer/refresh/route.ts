@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 function getClient() {
     return createPublicClient({
         chain: seismicTestnet,
-        transport: http(),
+        transport: http(process.env.NEXT_PUBLIC_RITUAL_RPC_URL || 'https://rpc.ritualfoundation.org'),
     });
 }
 

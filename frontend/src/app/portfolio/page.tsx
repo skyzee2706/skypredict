@@ -49,21 +49,23 @@ export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const { showToast } = useToast();
-    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets();
+    const [positions, setPositions] = useState<PortfolioPosition[]>([]);
+    const [claiming, setClaiming] = useState<string | null>(null);
+    const [historyPage, setHistoryPage] = useState(1);
+    const shouldPollPortfolio = positions.length === 0;
+    const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
+    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval });
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const liveAddresses = useMemo(() => {
         const cached = cachedPortfolio?.marketAddresses ?? [];
         return cached.length > 0 ? cached : addresses;
     }, [addresses, cachedPortfolio]);
-    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
+    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined, { refetchInterval: portfolioRefetchInterval });
     const positionMarketAddresses = useMemo(
         () => batchedPositions.map((position) => position.marketAddress),
         [batchedPositions]
     );
-    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses);
-    const [positions, setPositions] = useState<PortfolioPosition[]>([]);
-    const [claiming, setClaiming] = useState<string | null>(null);
-    const [historyPage, setHistoryPage] = useState(1);
+    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval });
 
     const userStats = useMemo(() => {
         const volume = positions.reduce((sum, position) => sum + position.total, 0);
@@ -78,14 +80,33 @@ export default function PortfolioPage() {
         };
     }, [cachedPortfolio, positions]);
 
-    // Portfolio is app-level: we fetch all markets and batch check positions.
-    // No external API needed — everything comes from on-chain via batched hooks.
+    // Fast path for production: use the server-side indexer cache first so we
+    // only check markets this wallet has interacted with. If the cache is empty
+    // or unavailable, the batched on-chain hooks below still work as fallback.
     useEffect(() => {
+        let cancelled = false;
+
         if (!address) {
             setCachedPortfolio(null);
             return;
         }
-        // No cached portfolio API needed — batched hooks handle everything
+
+        setCachedPortfolio(null);
+
+        fetch(`/api/portfolio/${address}`, { cache: "no-store" })
+            .then((response) => (response.ok ? response.json() : null))
+            .then((data: CachedPortfolioResponse | null) => {
+                if (!cancelled && data?.marketAddresses?.length) {
+                    setCachedPortfolio(data);
+                }
+            })
+            .catch((error) => {
+                console.warn("Portfolio cache unavailable, falling back to chain scan:", error);
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, [address]);
 
     useEffect(() => {

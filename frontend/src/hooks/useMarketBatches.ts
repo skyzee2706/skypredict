@@ -10,6 +10,10 @@ const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
 const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
 const ZERO_FACTORY = '0x0000000000000000000000000000000000000000';
 
+type BatchHookOptions = {
+  refetchInterval?: number | false;
+};
+
 const MARKET_FIELDS = [
   'question',
   'strikePrice',
@@ -168,8 +172,9 @@ function buildMarketData(address: `0x${string}`, values: unknown[]): MarketData 
   };
 }
 
-export function useFactoryMarkets() {
+export function useFactoryMarkets(options: BatchHookOptions = {}) {
   const enabled = Boolean(FACTORY_ADDRESS && FACTORY_ADDRESS !== ZERO_FACTORY);
+  const refetchInterval = options.refetchInterval ?? 10_000;
   const { data, isLoading, isFetching, isFetched, error, refetch } = useReadContract({
     address: FACTORY_ADDRESS,
     abi: FACTORY_ABI,
@@ -177,7 +182,7 @@ export function useFactoryMarkets() {
     query: {
       enabled,
       staleTime: 10_000,
-      refetchInterval: 10_000,
+      refetchInterval,
       refetchOnWindowFocus: false,
       retry: 3,
       retryDelay: 1_000
@@ -194,7 +199,8 @@ export function useFactoryMarkets() {
   };
 }
 
-export function useBatchedMarkets(addresses: `0x${string}`[]) {
+export function useBatchedMarkets(addresses: `0x${string}`[], options: BatchHookOptions = {}) {
+  const refetchInterval = options.refetchInterval ?? 10_000;
   const contracts = useMemo(() => {
     return addresses.flatMap((address) =>
       MARKET_FIELDS.map((functionName) => ({
@@ -211,7 +217,7 @@ export function useBatchedMarkets(addresses: `0x${string}`[]) {
     query: {
       enabled: addresses.length > 0,
       staleTime: 10_000,
-      refetchInterval: 10_000,
+      refetchInterval,
       refetchOnWindowFocus: false,
       retry: 3,
       retryDelay: 1_000
@@ -245,7 +251,8 @@ export interface BatchedUserPosition {
   total: number;
 }
 
-export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${string}`) {
+export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${string}`, options: BatchHookOptions = {}) {
+  const refetchInterval = options.refetchInterval ?? 30_000;
   const contracts = useMemo(() => {
     if (!user) return [];
     return addresses.map((address) => ({
@@ -262,7 +269,7 @@ export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${
     query: {
       enabled: addresses.length > 0 && Boolean(user),
       staleTime: 30_000,
-      refetchInterval: 30_000,
+      refetchInterval,
       refetchOnWindowFocus: false,
       retry: 3,
       retryDelay: 1_000
