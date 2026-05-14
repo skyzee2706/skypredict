@@ -49,14 +49,18 @@ export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const { showToast } = useToast();
-    const { addresses } = useFactoryMarkets();
+    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching } = useFactoryMarkets();
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const liveAddresses = useMemo(() => {
         const cached = cachedPortfolio?.marketAddresses ?? [];
         return cached.length > 0 ? cached : addresses;
     }, [addresses, cachedPortfolio]);
-    const { markets: batchedMarkets, isLoading: marketsLoading } = useBatchedMarkets(liveAddresses);
-    const { positions: batchedPositions, isLoading: positionsLoading } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
+    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined);
+    const positionMarketAddresses = useMemo(
+        () => batchedPositions.map((position) => position.marketAddress),
+        [batchedPositions]
+    );
+    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching } = useBatchedMarkets(positionMarketAddresses);
     const [positions, setPositions] = useState<PortfolioPosition[]>([]);
     const [claiming, setClaiming] = useState<string | null>(null);
     const [historyPage, setHistoryPage] = useState(1);
@@ -139,7 +143,11 @@ export default function PortfolioPage() {
         // button API stable without reintroducing direct per-market RPC loops.
     }, []);
 
-    const isLoading = isConnected && positions.length === 0 && (marketsLoading || positionsLoading);
+    const hasLoadedFactory = !factoryLoading && !factoryFetching;
+    const hasCheckedPositions = isConnected && liveAddresses.length > 0 && !positionsLoading && !positionsFetching;
+    const needsMarketDetails = batchedPositions.length > 0;
+    const hasLoadedPositionMarkets = !needsMarketDetails || (!marketsLoading && !marketsFetching);
+    const isLoading = isConnected && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
     const handleClaim = async (position: PortfolioPosition) => {
         setClaiming(position.market.contractId);
@@ -228,7 +236,18 @@ export default function PortfolioPage() {
                     )}
 
                     {isConnected && isLoading && (
-                        <div style={{ padding: "42px", textAlign: "center", color: "var(--text-muted)" }}>Loading portfolio from chain…</div>
+                        <div style={{ padding: "42px", textAlign: "center", borderRadius: "22px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)", display: "grid", placeItems: "center", gap: "14px" }}>
+                            <div style={{ width: "34px", height: "34px", borderRadius: "999px", border: "3px solid rgba(255,255,255,0.12)", borderTopColor: "#22c55e", animation: "portfolioSpin 0.8s linear infinite" }} />
+                            <div>
+                                <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "6px" }}>Loading trading history…</p>
+                                <p style={{ color: "var(--text-muted)", fontSize: "13px" }}>Checking your wallet positions on-chain.</p>
+                            </div>
+                            <style jsx>{`
+                                @keyframes portfolioSpin {
+                                    to { transform: rotate(360deg); }
+                                }
+                            `}</style>
+                        </div>
                     )}
 
                     {isConnected && !isLoading && sortedPositions.length === 0 && (
