@@ -35,9 +35,10 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  /* Fixed 4 columns, prevent blowout with minmax(0, ...) */
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--spacing-md);
+  min-width: 0;
+  transition: grid-template-columns 0.32s cubic-bezier(0.22, 1, 0.36, 1), gap 0.32s ease;
 }
 
 @media (max-width: 1400px) {
@@ -60,26 +61,28 @@
 
 .sidePanelContainer {
   width: 450px;
-  /* Slightly wider side panel */
-  flex-shrink: 0;
+  flex: 0 0 450px;
+  min-width: 0;
   border-left: 1px solid var(--divider);
   background: color-mix(in srgb, var(--card-bg) 94%, transparent);
   box-shadow: -10px 0 24px rgba(17, 24, 39, 0.06);
   height: 100%;
-  animation: slideIn 0.3s ease-out;
+  animation: slideIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
   backdrop-filter: blur(14px) saturate(120%);
   -webkit-backdrop-filter: blur(14px) saturate(120%);
+  overflow: hidden;
+  will-change: transform, opacity;
 }
 
 @keyframes slideIn {
   from {
-    width: 0;
     opacity: 0;
+    transform: translateX(18px);
   }
 
   to {
-    width: 450px;
     opacity: 1;
+    transform: translateX(0);
   }
 }
 

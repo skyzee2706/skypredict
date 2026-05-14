@@ -13,10 +13,10 @@ export const ritualChain = defineChain({
   },
   rpcUrls: {
     default: {
-      http: [process.env.NEXT_PUBLIC_RITUAL_RPC_URL || process.env.NEXT_PUBLIC_SEISMIC_RPC_URL || DEFAULT_RPC],
+      http: [process.env.NEXT_PUBLIC_RITUAL_RPC_URL || DEFAULT_RPC],
     },
     public: {
-      http: [process.env.NEXT_PUBLIC_RITUAL_RPC_URL || process.env.NEXT_PUBLIC_SEISMIC_RPC_URL || DEFAULT_RPC],
+      http: [process.env.NEXT_PUBLIC_RITUAL_RPC_URL || DEFAULT_RPC],
     },
   },
   blockExplorers: {

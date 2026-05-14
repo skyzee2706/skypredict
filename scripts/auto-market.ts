@@ -14,9 +14,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import ccxt from 'ccxt';
 
-const RPC_URL = process.env.RITUAL_RPC_URL || process.env.SEISMIC_RPC_URL || process.env.BASE_SEPOLIA_RPC_URL || 'https://rpc.ritualfoundation.org';
+const RPC_URL = process.env.RITUAL_RPC_URL || 'https://rpc.ritualfoundation.org';
 const PRIVATE_KEY = process.env.PRIVATE_KEY || '';
-const FACTORY_ADDRESS = (process.env.FACTORY_ADDRESS || process.env.NEXT_PUBLIC_FACTORY_ADDRESS || process.env.NEXT_PUBLIC_BET_FACTORY_ADDRESS) as string;
+const FACTORY_ADDRESS = process.env.FACTORY_ADDRESS as string;
 const FOOTBALL_API_KEY = process.env.FOOTBALL_DATA_API_KEY || '';
 const SPORTS_STATE_FILE = path.join(__dirname, 'sports-markets.json');
 
@@ -79,7 +79,7 @@ async function sendResolveOutcomeTx(market: ethers.Contract, outcome: 0 | 1 | 2,
 
 async function sendCreateMarketTx(factory: ethers.Contract, question: string, strike: bigint, endTime: number, bettingEndTime: number) {
   const data = factory.interface.encodeFunctionData('createMarket', [question, strike, endTime, bettingEndTime]);
-  const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 2_500_000n));
+  const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 5_000_000n));
   await tx.wait();
 }
 
@@ -95,7 +95,7 @@ async function sendCreateSportsMarketTx(factory: ethers.Contract, fixture: Track
     fixture.kickoff,
     fixture.kickoff
   ]);
-  const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 3_000_000n));
+  const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 5_000_000n));
   const receipt = await tx.wait();
   console.log(`[SPORT] Created ${question} | tx=${receipt?.hash}`);
 }

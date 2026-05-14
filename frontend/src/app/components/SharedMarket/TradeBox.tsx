@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styles from './TradeBox.module.css';
 import { MarketData, getUserMarketStatus, UserMarketStatus } from '../../../data/markets';
-import { claimRewards, placeBet, approveUsdlUnlimited, dripUsdl, checkUsdlAllowance } from '../../../lib/onchain/writes';
+import { claimRewards, placeBet, checkUsdlBalance, isRouterApproved, approveRouter } from '../../../lib/onchain/writes';
 import { useWallet } from '../../providers/WalletProvider';
 import { useToast } from '../../providers/ToastProvider';
 import ConnectWalletPrompt from '../Wallet/ConnectWalletPrompt';
@@ -20,10 +20,9 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
     const [amount, setAmount] = useState<string>('');
     const [selectedOutcome, setSelectedOutcome] = useState<'YES' | 'DRAW' | 'NO'>('YES');
     const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
-    const [allowance, setAllowance] = React.useState<bigint | undefined>(undefined);
-    const [isDripping, setIsDripping] = React.useState(false);
-    const [isApproving, setIsApproving] = React.useState(false);
     const [isPlacingBet, setIsPlacingBet] = React.useState(false);
+    const [routerApproved, setRouterApproved] = React.useState(false);
+    const [isApproving, setIsApproving] = React.useState(false);
 
     const { isConnected, walletAddress, connect, isConnecting } = useWallet();
     const { showToast } = useToast();
@@ -49,31 +48,20 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
         }
     }, [walletAddress, isConnected]);
 
-    const fetchAllowance = React.useCallback(async () => {
-        if (!walletAddress || !isConnected || !market?.contractId) {
-            setAllowance(undefined);
-            return;
-        }
-
-        try {
-            const value = await checkUsdlAllowance(
-                walletAddress as `0x${string}`,
-                market.contractId as `0x${string}`
-            );
-            setAllowance(value);
-        } catch (error) {
-            console.error('Failed to fetch token allowance:', error);
-            setAllowance(undefined);
-        }
-    }, [walletAddress, isConnected, market?.contractId]);
-
     React.useEffect(() => {
         fetchTokenBalance();
     }, [fetchTokenBalance]);
 
+    // Check router approval status
     React.useEffect(() => {
-        fetchAllowance();
-    }, [fetchAllowance]);
+        if (!walletAddress || !isConnected) {
+            setRouterApproved(false);
+            return;
+        }
+        isRouterApproved(walletAddress as `0x${string}`)
+            .then(setRouterApproved)
+            .catch(() => setRouterApproved(false));
+    }, [walletAddress, isConnected]);
 
     const [userStatus, setUserStatus] = React.useState<UserMarketStatus | null>(null);
 
@@ -107,82 +95,9 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
         }
     };
 
-    const handleApproval = async () => {
-        if (!walletAddress || !isConnected || !market?.contractId) return;
-
-        setIsApproving(true);
-        try {
-            await approveUsdlUnlimited(market.contractId as `0x${string}`);
-            showToast(`${TOKEN_SYMBOL} approval successful! You can now place bets.`, 'success');
-            await fetchAllowance();
-        } catch (error: unknown) {
-            console.error(`Failed to approve ${TOKEN_SYMBOL}:`, error);
-
-            const errorObj = error as { message?: string; code?: string | number };
-            const errorMessage = errorObj?.message?.toLowerCase() || '';
-            const errorCode = errorObj?.code;
-
-            if (
-                errorCode === 4001 ||
-                errorCode === 'ACTION_REJECTED' ||
-                errorMessage.includes('user rejected') ||
-                errorMessage.includes('cancelled') ||
-                errorMessage.includes('canceled') ||
-                errorMessage.includes('declined') ||
-                errorMessage.includes('denied')
-            ) {
-                showToast('Approval cancelled. You can try again when ready.', 'info');
-            } else {
-                showToast('Approval failed. Please check your wallet and try again.', 'error');
-            }
-        } finally {
-            setIsApproving(false);
-        }
-    };
-
     const numericAmount = parseFloat(amount) || 0;
-
-    const handleDrip = async () => {
-        if (!isConnected || !walletAddress) return;
-
-        setIsDripping(true);
-        try {
-            await dripUsdl();
-            showToast(`Successfully received 1000 ${TOKEN_SYMBOL}!`, 'success');
-            await fetchTokenBalance();
-            window.dispatchEvent(new Event('skyusd:balance-refresh'));
-        } catch (error: unknown) {
-            console.error('Failed to drip token - detailed error:', error);
-
-            const errorObj = error as { message?: string; code?: string | number };
-            const errorMessage = errorObj?.message?.toLowerCase() || '';
-            const errorCode = errorObj?.code;
-
-            if (
-                errorCode === 4001 ||
-                errorCode === 'ACTION_REJECTED' ||
-                errorMessage.includes('user rejected') ||
-                errorMessage.includes('cancelled') ||
-                errorMessage.includes('canceled') ||
-                errorMessage.includes('declined') ||
-                errorMessage.includes('denied')
-            ) {
-                showToast('Drip cancelled. You can try again when ready.', 'info');
-            } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient eth')) {
-                showToast('Insufficient ETH for gas. Please get some testnet ETH first.', 'error');
-            } else if (errorMessage.includes('wait 24h') || errorMessage.includes('cooldown') || errorMessage.includes('24h limit')) {
-                showToast('You have reached your daily faucet limit. Try again in 24 hours.', 'warning');
-            } else {
-                showToast(`Failed to get ${TOKEN_SYMBOL}. Please check console for details.`, 'error');
-            }
-        } finally {
-            setIsDripping(false);
-        }
-    };
-
     const amountInUnits = BigInt(Math.floor(numericAmount * SKYUSD_MULTIPLIER));
     const insufficientBalance = tokenBalance ? tokenBalance < amountInUnits : false;
-    const needsApproval = amountInUnits > 0 ? !allowance || allowance < amountInUnits : false;
 
     if (market) {
         if (market.state === 'RESOLVED' || market.state === 'UNDETERMINED') {
@@ -336,22 +251,17 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                             }}
                         >
                             <span>Balance: {(Number(tokenBalance) / SKYUSD_MULTIPLIER).toFixed(2)} {TOKEN_SYMBOL}</span>
-                            <button
-                                onClick={handleDrip}
-                                disabled={isDripping}
+                            <a
+                                href="/faucet"
                                 style={{
-                                    background: 'var(--primary)',
-                                    color: 'var(--primary-foreground)',
-                                    border: '1px solid var(--primary)',
-                                    padding: '2px 6px',
-                                    borderRadius: '4px',
+                                    color: 'var(--primary)',
                                     fontSize: '10px',
-                                    cursor: isDripping ? 'not-allowed' : 'pointer',
-                                    opacity: isDripping ? 0.7 : 1
+                                    fontWeight: 700,
+                                    textDecoration: 'none'
                                 }}
                             >
-                                {isDripping ? 'Getting...' : `Get ${TOKEN_SYMBOL}`}
-                            </button>
+                                Deposit RITUAL →
+                            </a>
                         </div>
                     ) : null}
                 </div>
@@ -371,7 +281,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                             </div>
                             {selectedOutcome === 'YES' && <span>Selected</span>}
                         </button>
-                        {market?.category === 'SPORTS' && (
+                        {(market?.category === 'SPORTS' || market?.category === 'POLITICS') && (
                             <button
                                 className={`${styles.outcomeCard} ${styles.outcomeCardDraw ?? styles.outcomeCardOrange} ${selectedOutcome === 'DRAW' ? styles.selectedOutcome : styles.unselectedOutcome}`}
                                 onClick={() => setSelectedOutcome('DRAW')}
@@ -396,7 +306,38 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                     </div>
                 </div>
 
-                {insufficientBalance && numericAmount > 0 && (
+                {/* Step 1: One-time Router approval */}
+                {!routerApproved && isConnected && (
+                    <button
+                        className={styles.payoutButton}
+                        style={{ background: 'linear-gradient(135deg, var(--primary), #10b981)', marginBottom: '8px' }}
+                        onClick={async () => {
+                            setIsApproving(true);
+                            try {
+                                await approveRouter();
+                                setRouterApproved(true);
+                                showToast('SkyUSD approved! You can now bet on any market with 1 click.', 'success');
+                                window.dispatchEvent(new Event('skyusd:balance-refresh'));
+                            } catch (error: unknown) {
+                                const errorObj = error as { message?: string; code?: string | number };
+                                const errorCode = errorObj?.code;
+                                const errorMessage = errorObj?.message?.toLowerCase() || '';
+                                if (errorCode === 4001 || errorCode === 'ACTION_REJECTED' || errorMessage.includes('user rejected')) {
+                                    showToast('Approval cancelled.', 'info');
+                                } else {
+                                    showToast('Approval failed. Please try again.', 'error');
+                                }
+                            } finally {
+                                setIsApproving(false);
+                            }
+                        }}
+                        disabled={isApproving}
+                    >
+                        {isApproving ? 'Approving SkyUSD...' : '🔓 Enable Trading (one-time approval)'}
+                    </button>
+                )}
+                {/* Step 2: Bet button (only after approval) */}
+                {routerApproved && insufficientBalance && numericAmount > 0 && (
                     <button
                         className={styles.payoutButton}
                         disabled
@@ -405,19 +346,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                         Insufficient {TOKEN_SYMBOL} Balance
                     </button>
                 )}
-
-                {needsApproval && !insufficientBalance && (
-                    <button
-                        className={styles.payoutButton}
-                        onClick={handleApproval}
-                        disabled={isApproving}
-                        style={{ backgroundColor: 'var(--primary)', border: '1px solid var(--primary)' }}
-                    >
-                        {isApproving ? 'Check your wallet to approve...' : `Approve ${TOKEN_SYMBOL} to place bets`}
-                    </button>
-                )}
-
-                {!needsApproval && !insufficientBalance && (
+                {routerApproved && !insufficientBalance && (
                     <button
                         className={styles.payoutButton}
                         onClick={async () => {
@@ -438,7 +367,6 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                                 await placeBet(market.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
                                 showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
                                 await fetchTokenBalance();
-                                await fetchAllowance();
                                 window.dispatchEvent(new Event('skyusd:balance-refresh'));
                                 setAmount('');
                             } catch (error: unknown) {
@@ -461,11 +389,11 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                                 } else if (errorMessage.includes('betting closed') || errorMessage.includes('beforeend')) {
                                     showToast('Betting is closed for this market. The deadline has passed.', 'error');
                                 } else if (errorMessage.includes('transferfrom') || errorMessage.includes('erc20') || errorMessage.includes('insufficient allowance')) {
-                                    showToast('Token transfer failed. Please approve SkyUSD first, then try again.', 'error');
+                                    showToast('Token transfer failed. Try re-approving.', 'error');
                                 } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient eth')) {
                                     showToast('Insufficient RITUAL for gas. Please get some testnet RITUAL first.', 'error');
                                 } else {
-                                    showToast('Transaction reverted. Please ensure SkyUSD is approved and you have enough RITUAL for gas.', 'error');
+                                    showToast('Transaction reverted. Please ensure you have enough SkyUSD and RITUAL for gas.', 'error');
                                     console.error('Bet error details:', { errorMessage, errorCode, error });
                                 }
                             } finally {
@@ -488,5 +416,3 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 };
 
 export default TradeBox;
-
-

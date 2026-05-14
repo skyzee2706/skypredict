@@ -6,26 +6,21 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title SkyUSDT
- * @notice Test SkyUSD token for SkyPredict on Ritual.
- *         Faucet claims require a small native fee and are limited per wallet.
- *         Owner can mint tokens and withdraw accumulated faucet fees.
+ * @notice SkyUSD token for SkyPredict on Ritual Network.
+ *         Users deposit native RITUAL to receive SkyUSD at a fixed rate.
+ *         Rate: 0.01 RITUAL = 100 SkyUSD (i.e. 10,000 SkyUSD per 1 RITUAL).
+ *         Min deposit: 0.01 RITUAL, Max deposit: 1 RITUAL per transaction.
+ *         Owner can mint tokens and withdraw accumulated deposit funds.
  */
 contract SkyUSDT is ERC20, Ownable {
-    uint8 private constant DECIMALS = 6;
-    uint256 public constant FAUCET_AMOUNT = 1_000 * 10 ** 6;
-    uint256 public constant FAUCET_FEE = 0.001 ether;
-    uint256 public constant FAUCET_WINDOW = 24 hours;
-    uint256 public constant MAX_CLAIMS_PER_WINDOW = 2;
+    uint8 private constant DECIMALS = 18;
 
-    struct ClaimWindow {
-        uint64 windowStart;
-        uint8 claims;
-    }
+    uint256 public constant MIN_DEPOSIT = 0.01 ether;
+    uint256 public constant MAX_DEPOSIT = 1 ether;
+    uint256 public constant RATE_PER_ETH = 10_000; // 10,000 SkyUSD per 1 RITUAL
 
-    mapping(address => ClaimWindow) public claimWindows;
-
-    event FaucetClaimed(address indexed by, address indexed recipient, uint256 amount, uint256 feePaid);
-    event FaucetFeesWithdrawn(address indexed owner, uint256 amount);
+    event Deposited(address indexed user, uint256 ritualAmount, uint256 skyusdMinted);
+    event FundsWithdrawn(address indexed owner, uint256 amount);
 
     constructor(address initialOwner) ERC20("Sky USD", "SkyUSD") Ownable(initialOwner) {
         _mint(initialOwner, 1_000_000 * 10 ** DECIMALS);
@@ -35,55 +30,41 @@ contract SkyUSDT is ERC20, Ownable {
         return DECIMALS;
     }
 
-    function faucet(address recipient) external payable {
-        require(recipient != address(0), "Invalid recipient");
-        require(msg.value == FAUCET_FEE, "Invalid faucet fee");
+    /**
+     * @notice Deposit native RITUAL to receive SkyUSD.
+     *         Min: 0.01 RITUAL (= 100 SkyUSD), Max: 1 RITUAL (= 10,000 SkyUSD).
+     *         Rate is linear: amount * 10,000 SkyUSD per RITUAL.
+     */
+    function deposit() external payable {
+        require(msg.value >= MIN_DEPOSIT, "Below minimum deposit (0.01 RITUAL)");
+        require(msg.value <= MAX_DEPOSIT, "Above maximum deposit (1 RITUAL)");
 
-        ClaimWindow storage claimWindow = claimWindows[recipient];
-        if (block.timestamp >= uint256(claimWindow.windowStart) + FAUCET_WINDOW) {
-            claimWindow.windowStart = uint64(block.timestamp);
-            claimWindow.claims = 0;
-        }
-
-        require(claimWindow.claims < MAX_CLAIMS_PER_WINDOW, "24h claim limit reached");
-        claimWindow.claims += 1;
-
-        _mint(recipient, FAUCET_AMOUNT);
-        emit FaucetClaimed(msg.sender, recipient, FAUCET_AMOUNT, msg.value);
+        uint256 skyusdAmount = (msg.value * RATE_PER_ETH * 10 ** DECIMALS) / 1 ether;
+        _mint(msg.sender, skyusdAmount);
+        emit Deposited(msg.sender, msg.value, skyusdAmount);
     }
 
     function ownerMint(address to, uint256 amount) external onlyOwner {
         _mint(to, amount);
     }
 
-    function withdrawFees(address payable recipient) external onlyOwner {
+    /**
+     * @notice Owner withdraws all accumulated RITUAL from deposits.
+     */
+    function withdrawFunds(address payable recipient) external onlyOwner {
         require(recipient != address(0), "Invalid recipient");
         uint256 amount = address(this).balance;
-        require(amount > 0, "No fees to withdraw");
+        require(amount > 0, "No funds to withdraw");
 
         (bool success, ) = recipient.call{value: amount}("");
-        require(success, "Fee withdrawal failed");
-        emit FaucetFeesWithdrawn(recipient, amount);
+        require(success, "Withdrawal failed");
+        emit FundsWithdrawn(recipient, amount);
     }
 
-    function faucetFeeBalance() external view returns (uint256) {
+    /**
+     * @notice View total RITUAL balance held by this contract from deposits.
+     */
+    function depositBalance() external view returns (uint256) {
         return address(this).balance;
-    }
-
-    function cooldownRemaining(address recipient) external view returns (uint256) {
-        ClaimWindow memory claimWindow = claimWindows[recipient];
-        if (claimWindow.claims < MAX_CLAIMS_PER_WINDOW) return 0;
-
-        uint256 next = uint256(claimWindow.windowStart) + FAUCET_WINDOW;
-        if (block.timestamp >= next) return 0;
-        return next - block.timestamp;
-    }
-
-    function claimsRemaining(address recipient) external view returns (uint256) {
-        ClaimWindow memory claimWindow = claimWindows[recipient];
-        if (block.timestamp >= uint256(claimWindow.windowStart) + FAUCET_WINDOW) {
-            return MAX_CLAIMS_PER_WINDOW;
-        }
-        return MAX_CLAIMS_PER_WINDOW - claimWindow.claims;
     }
 }

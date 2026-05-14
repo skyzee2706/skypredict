@@ -19,7 +19,7 @@ interface MarketFullPageProps {
     // Legacy props for backwards compatibility
     marketTitle?: string;
     probability?: number;
-    type?: 'crypto' | 'stock' | 'sport' | 'other';
+    type?: 'crypto' | 'stock' | 'sport' | 'politics' | 'other';
     identifier?: string;
     description?: string;
     resolutionRule?: string;
@@ -205,21 +205,21 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
             const probDraw = (market.probDraw ?? 0) * 100;
             const probNo = market.probNo * 100;
             return (
-                <div className={styles.progressSection}>
-                    <div className={styles.probabilityText}>
-                        <span style={{ color: 'var(--success)' }}>{probYes.toFixed(1)}%</span>
-                        <span style={{ color: 'var(--text-secondary)' }}>{probDraw.toFixed(1)}%</span>
-                        <span style={{ color: 'var(--danger)' }}>{probNo.toFixed(1)}%</span>
+                <div className={`${styles.progressSection} ${styles.sportsProgressSection}`}>
+                    <div className={styles.sportsProbabilityText}>
+                        <span className={styles.sportsProbYes}>{probYes.toFixed(1)}%</span>
+                        <span className={styles.sportsProbDraw}>{probDraw.toFixed(1)}%</span>
+                        <span className={styles.sportsProbNo}>{probNo.toFixed(1)}%</span>
                     </div>
-                    <div className={styles.barBackground} style={{ display: 'flex', gap: '2px', backgroundColor: 'transparent' }}>
-                        <div className={styles.barFill} style={{ width: `${probYes}%`, backgroundColor: 'var(--success)', height: '100%', borderRadius: '4px' }}></div>
-                        <div className={styles.barFill} style={{ width: `${probDraw}%`, backgroundColor: 'var(--text-secondary)', height: '100%', borderRadius: '4px' }}></div>
-                        <div className={styles.barFill} style={{ width: `${probNo}%`, backgroundColor: 'var(--danger)', height: '100%', borderRadius: '4px' }}></div>
+                    <div className={styles.sportsBarBackground}>
+                        <div className={styles.sportsBarYes} style={{ flexGrow: Math.max(probYes, 0.01) }}></div>
+                        <div className={styles.sportsBarDraw} style={{ flexGrow: Math.max(probDraw, 0.01) }}></div>
+                        <div className={styles.sportsBarNo} style={{ flexGrow: Math.max(probNo, 0.01) }}></div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideAName ?? 'Home'}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.drawName ?? 'Draw'}</span>
-                        <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideBName ?? 'Away'}</span>
+                    <div className={styles.sportsOutcomeLabels}>
+                        <span title={market?.sideAName ?? 'Home'}>{market?.sideAName ?? 'Home'}</span>
+                        <span title={market?.drawName ?? 'Draw'}>{market?.drawName ?? 'Draw'}</span>
+                        <span title={market?.sideBName ?? 'Away'}>{market?.sideBName ?? 'Away'}</span>
                     </div>
                 </div>
             );

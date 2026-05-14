@@ -5,7 +5,7 @@ import { PriceChart } from './PriceChart';
 
 interface ChartSectionProps {
     probability: number;
-    type?: 'crypto' | 'stock' | 'sport' | 'other';
+    type?: 'crypto' | 'stock' | 'sport' | 'politics' | 'other';
     identifier?: string;
     market?: MarketData;
 }

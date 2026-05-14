@@ -2,7 +2,7 @@
 
 export type MarketState = 'ACTIVE' | 'RESOLVING' | 'RESOLVED' | 'UNDETERMINED';
 export type MarketOutcome = 'YES' | 'NO' | 'DRAW' | string;
-export type MarketCategory = 'CRYPTO' | 'STOCKS' | 'SPORTS';
+export type MarketCategory = 'CRYPTO' | 'STOCKS' | 'SPORTS' | 'POLITICS';
 
 export interface SportLiveScore {
     fixtureId: number;
@@ -24,7 +24,7 @@ export interface MarketData {
     drawName?: string;
     sideBName?: string;
     description: string;
-    type: 'crypto' | 'stock' | 'sport' | 'other';
+    type: 'crypto' | 'stock' | 'sport' | 'politics' | 'other';
     category: MarketCategory;
     identifier: string;
     creationDate?: number;

@@ -1,22 +1,18 @@
-import { Abi, createPublicClient, http } from 'viem';
+import { Abi, createPublicClient, http, parseEther } from 'viem';
 import { getAccount, writeContract, switchChain } from '@wagmi/core';
 import { seismicTestnet } from './seismicChain';
 import { wagmiConfig } from './wagmiConfig';
-import MarketFactoryArtifact from '../contracts/MarketFactory.json';
 import PredictionMarketArtifact from '../contracts/PredictionMarket.json';
-import { FACTORY_ADDRESS, TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER } from '../constants';
+import { TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER, ROUTER_ADDRESS, ROUTER_ABI } from '../constants';
 
-const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
 const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
 
 function getPublicClient() {
   return createPublicClient({
     chain: seismicTestnet,
-    transport: http(process.env.NEXT_PUBLIC_RITUAL_RPC_URL || process.env.NEXT_PUBLIC_SEISMIC_RPC_URL || 'https://rpc.ritualfoundation.org')
+    transport: http(process.env.NEXT_PUBLIC_RITUAL_RPC_URL || 'https://rpc.ritualfoundation.org')
   });
 }
-
-const FAUCET_FEE_WEI = 1_000_000_000_000_000n;
 
 async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<void> {
   const publicClient = getPublicClient();
@@ -28,6 +24,46 @@ async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<void> {
 
 export type MarketOutcome = 'YES' | 'NO' | 'DRAW';
 
+/**
+ * Check if user has approved SkyUSD to the Router.
+ * Returns true if allowance >= a very large amount (effectively unlimited).
+ */
+export async function isRouterApproved(userAddress: `0x${string}`): Promise<boolean> {
+  const publicClient = getPublicClient();
+  const allowance = (await publicClient.readContract({
+    address: TOKEN_ADDRESS as `0x${string}`,
+    abi: SKYUSD_ABI,
+    functionName: 'allowance',
+    args: [userAddress, ROUTER_ADDRESS]
+  })) as bigint;
+
+  // Considered "approved" if allowance > 1 billion tokens (effectively unlimited)
+  const threshold = BigInt(1_000_000_000) * BigInt(SKYUSD_MULTIPLIER);
+  return allowance >= threshold;
+}
+
+/**
+ * Approve SkyUSD to the Router (once, unlimited).
+ * After this, all bets on any market only need 1 tx each.
+ */
+export async function approveRouter(): Promise<void> {
+  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  const maxUint256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
+
+  const hash = await writeContract(wagmiConfig, {
+    chainId: seismicTestnet.id,
+    address: TOKEN_ADDRESS as `0x${string}`,
+    abi: SKYUSD_ABI,
+    functionName: 'approve',
+    args: [ROUTER_ADDRESS, maxUint256]
+  });
+  await waitForConfirmedReceipt(hash);
+}
+
+/**
+ * Place a bet via the Router. Requires prior approval to Router.
+ * This is always a single transaction — no per-market approval needed.
+ */
 export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutcome, amount: number): Promise<void> {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
   const publicClient = getPublicClient();
@@ -39,6 +75,7 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error('Bet amount must be greater than zero.');
   }
 
+  // Check betting deadline
   const bettingEndTime = (await publicClient.readContract({
     address: marketAddress,
     abi: MARKET_ABI,
@@ -51,6 +88,7 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error('Betting is closed for this market. The deadline has passed.');
   }
 
+  // Check balance
   const balance = (await publicClient.readContract({
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
@@ -62,25 +100,22 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error(`Insufficient SkyUSD balance. You have ${Number(balance) / SKYUSD_MULTIPLIER} but need ${amount}.`);
   }
 
-  const allowance = (await publicClient.readContract({
-    address: TOKEN_ADDRESS as `0x${string}`,
-    abi: SKYUSD_ABI,
-    functionName: 'allowance',
-    args: [account.address, marketAddress]
-  })) as bigint;
-
-  if (allowance < amountInUnits) {
-    throw new Error('Insufficient SkyUSD allowance. Please approve the market contract first.');
+  // Check Router allowance — auto-approve if needed
+  const approved = await isRouterApproved(account.address);
+  if (!approved) {
+    await approveRouter();
   }
 
-  const functionName = outcome === 'YES' ? 'buyYes' : outcome === 'NO' ? 'buyNo' : 'buyDraw';
+  // Map outcome to enum: 0 = SideA (YES), 1 = Draw, 2 = SideB (NO)
+  const outcomeEnum = outcome === 'YES' ? 0 : outcome === 'DRAW' ? 1 : 2;
 
+  // Place bet via Router — always 1 tx
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
-    address: marketAddress,
-    abi: MARKET_ABI,
-    functionName,
-    args: [amountInUnits]
+    address: ROUTER_ADDRESS as `0x${string}`,
+    abi: ROUTER_ABI,
+    functionName: 'placeBet',
+    args: [marketAddress, outcomeEnum, amountInUnits]
   });
   await waitForConfirmedReceipt(hash);
 }
@@ -133,47 +168,50 @@ export async function approveUsdlUnlimited(spenderAddress: `0x${string}`): Promi
   await waitForConfirmedReceipt(hash);
 }
 
-export async function dripUsdl(userAddress?: `0x${string}`): Promise<void> {
+/**
+ * Deposit native RITUAL to receive SkyUSD.
+ * @param ritualAmount Amount in RITUAL (e.g. 0.01 for minimum, up to 1.0)
+ */
+export async function depositRitual(ritualAmount: number = 0.01): Promise<void> {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
-  const account = getAccount(wagmiConfig);
-  const targetAddress = userAddress || account.address;
-  if (!targetAddress) throw new Error('Wallet not connected');
-
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
-    functionName: 'faucet',
-    args: [targetAddress],
-    value: FAUCET_FEE_WEI
+    functionName: 'deposit',
+    args: [],
+    value: parseEther(ritualAmount.toString())
   });
   await waitForConfirmedReceipt(hash);
 }
 
-export async function withdrawFaucetFees(recipient: `0x${string}`): Promise<void> {
+export async function withdrawDepositFunds(recipient: `0x${string}`): Promise<void> {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
-    functionName: 'withdrawFees',
+    functionName: 'withdrawFunds',
     args: [recipient]
   });
   await waitForConfirmedReceipt(hash);
 }
 
-export async function getFaucetFeeBalance(): Promise<bigint> {
+export async function getDepositBalance(): Promise<bigint> {
   const publicClient = getPublicClient();
   return (await publicClient.readContract({
     address: TOKEN_ADDRESS as `0x${string}`,
     abi: SKYUSD_ABI,
-    functionName: 'faucetFeeBalance',
+    functionName: 'depositBalance',
     args: []
   })) as bigint;
 }
 
 export async function isLegitBet(marketAddress: `0x${string}`): Promise<boolean> {
   const publicClient = getPublicClient();
+  const MarketFactoryArtifact = await import('../contracts/MarketFactory.json');
+  const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
+  const { FACTORY_ADDRESS } = await import('../constants');
   const markets = (await publicClient.readContract({
     address: FACTORY_ADDRESS as `0x${string}`,
     abi: FACTORY_ABI,
@@ -201,32 +239,8 @@ export async function getUserBets(marketAddress: `0x${string}`, userAddress: `0x
       onSideB: Number(sideBBetRaw) / SKYUSD_MULTIPLIER,
       claimed
     };
-  } catch (error) {
-    // Fallback for legacy 2-way crypto markets
-    const legacyAbi = [{
-      "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
-      "name": "getUserPosition",
-      "outputs": [
-        { "internalType": "uint256", "name": "_yesBet", "type": "uint256" },
-        { "internalType": "uint256", "name": "_noBet", "type": "uint256" },
-        { "internalType": "bool", "name": "_claimed", "type": "bool" }
-      ],
-      "stateMutability": "view", "type": "function"
-    }] as const;
-
-    const result = await publicClient.readContract({
-      address: marketAddress,
-      abi: legacyAbi,
-      functionName: 'getUserPosition',
-      args: [userAddress]
-    });
-    const [yesBetRaw, noBetRaw, claimed] = result as [bigint, bigint, boolean];
-    return {
-      onSideA: Number(yesBetRaw) / SKYUSD_MULTIPLIER,
-      onDraw: 0,
-      onSideB: Number(noBetRaw) / SKYUSD_MULTIPLIER,
-      claimed
-    };
+  } catch {
+    return { onSideA: 0, onDraw: 0, onSideB: 0, claimed: false };
   }
 }
 
@@ -250,29 +264,8 @@ export async function calculateUserWinnings(marketAddress: `0x${string}`, userAd
     sideABetRaw = pos[0];
     drawBetRaw = pos[1];
     sideBBetRaw = pos[2];
-  } catch (e) {
-    // Legacy fallback
-    const legacyAbi = [{
-      "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
-      "name": "getUserPosition",
-      "outputs": [
-        { "internalType": "uint256", "name": "_yesBet", "type": "uint256" },
-        { "internalType": "uint256", "name": "_noBet", "type": "uint256" },
-        { "internalType": "bool", "name": "_claimed", "type": "bool" }
-      ],
-      "stateMutability": "view", "type": "function"
-    }] as const;
-
-    const [aPool, bPool, userPos] = await Promise.all([
-      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'yesPool', args: [] }),
-      publicClient.readContract({ address: marketAddress, abi: MARKET_ABI, functionName: 'noPool', args: [] }),
-      publicClient.readContract({ address: marketAddress, abi: legacyAbi, functionName: 'getUserPosition', args: [userAddress] })
-    ]);
-    sideAPoolRaw = aPool as bigint;
-    sideBPoolRaw = bPool as bigint;
-    const pos = userPos as [bigint, bigint, boolean];
-    sideABetRaw = pos[0];
-    sideBBetRaw = pos[1];
+  } catch {
+    return { ifSideAWins: 0, ifDrawWins: 0, ifSideBWins: 0 };
   }
 
   const sideAPool = Number(sideAPoolRaw) / SKYUSD_MULTIPLIER;

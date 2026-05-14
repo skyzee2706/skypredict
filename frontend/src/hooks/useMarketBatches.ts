@@ -2,14 +2,13 @@ import { useMemo } from 'react';
 import { useReadContract, useReadContracts } from 'wagmi';
 import { Abi } from 'viem';
 import type { MarketData, MarketState } from '../data/markets';
-import { FACTORY_ADDRESS } from '../lib/constants';
+import { FACTORY_ADDRESS, SKYUSD_MULTIPLIER } from '../lib/constants';
 import MarketFactoryArtifact from '../lib/contracts/MarketFactory.json';
 import PredictionMarketArtifact from '../lib/contracts/PredictionMarket.json';
 
 const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
 const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
 const ZERO_FACTORY = '0x0000000000000000000000000000000000000000';
-const SKYUSD_MULTIPLIER = 1_000_000;
 
 const MARKET_FIELDS = [
   'question',

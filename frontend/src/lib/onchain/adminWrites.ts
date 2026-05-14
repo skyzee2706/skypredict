@@ -22,6 +22,9 @@ function parseStrikeFromTitle(title: string): bigint {
   return BigInt(Math.floor(parsed * 1e8));
 }
 
+/**
+ * Create a crypto market (binary YES/NO).
+ */
 export async function createBet(params: {
   title: string;
   resolutionCriteria: string;
@@ -49,11 +52,64 @@ export async function createBet(params: {
   return hash;
 }
 
-export async function setCreatorApproval(_creator: `0x${string}`, _approved: boolean) {
-  // Old MarketFactory does not support creator approval gating.
-  return;
+/**
+ * Create a market with custom outcomes (sports, politics, etc).
+ */
+export async function createMarketWithOutcomes(params: {
+  question: string;
+  sideAName: string;
+  drawName: string;
+  sideBName: string;
+  marketType: 'CRYPTO' | 'SPORTS' | 'POLITICS';
+  endDate: number;
+}) {
+  if (!isFactoryConfigured()) return;
+
+  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+
+  const bettingEndTime = Math.max(0, params.endDate - 15 * 60);
+
+  const hash = await writeContract(wagmiConfig, {
+    chainId: seismicTestnet.id,
+    address: FACTORY_ADDRESS as `0x${string}`,
+    abi: FACTORY_ABI,
+    functionName: 'createMarketWithOutcomes',
+    args: [
+      params.question,
+      params.sideAName,
+      params.drawName,
+      params.sideBName,
+      params.marketType,
+      0n, // strikePrice not used for politics/sports
+      BigInt(params.endDate),
+      BigInt(bettingEndTime)
+    ]
+  });
+
+  return hash;
 }
 
+/**
+ * Resolve a market with a specific outcome (for politics manual resolve).
+ * outcome: 0 = SideA, 1 = Draw, 2 = SideB
+ */
+export async function resolveWithOutcome(marketAddress: `0x${string}`, outcome: 0 | 1 | 2) {
+  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+
+  const hash = await writeContract(wagmiConfig, {
+    chainId: seismicTestnet.id,
+    address: marketAddress,
+    abi: MARKET_ABI,
+    functionName: 'resolveWithOutcome',
+    args: [outcome, BigInt(0)]
+  });
+
+  return hash;
+}
+
+/**
+ * Resolve a market via oracle (for crypto markets).
+ */
 export async function resolveBet(marketAddress: `0x${string}`) {
   await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
 
@@ -64,4 +120,9 @@ export async function resolveBet(marketAddress: `0x${string}`) {
     functionName: 'resolve',
     args: []
   });
+}
+
+export async function setCreatorApproval(_creator: `0x${string}`, _approved: boolean) {
+  // MarketFactory does not support creator approval gating.
+  return;
 }

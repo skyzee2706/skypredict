@@ -101,6 +101,7 @@ contract PredictionMarket is Initializable, OwnableUpgradeable {
         endTime = _endTime;
         bettingEndTime = _bettingEndTime;
         feeWallet = _feeWallet;
+        factory = msg.sender; // Record the factory that created this market
     }
 
     function totalPool() public view returns (uint256) {
@@ -165,6 +166,40 @@ contract PredictionMarket is Initializable, OwnableUpgradeable {
         }
 
         emit BetPlaced(msg.sender, outcome, amount, 0);
+    }
+
+    /// @notice Address of the factory that created this market
+    address public factory;
+
+    /// @notice Router address that can place bets on behalf of users
+    address public router;
+
+    /// @notice Set the router address (owner or factory)
+    function setRouter(address _router) external {
+        require(msg.sender == owner() || msg.sender == factory, "Not authorized");
+        router = _router;
+    }
+
+    /**
+     * @notice Place a bet on behalf of a user. Only callable by the Router.
+     *         Tokens must already be transferred to this contract by the Router.
+     */
+    function placeBetFor(address user, Outcome outcome, uint256 amount) external {
+        require(msg.sender == router, "Only router");
+        require(amount > 0, "Amount must be > 0");
+
+        if (outcome == Outcome.SideA) {
+            sideABets[user] += amount;
+            sideAPool += amount;
+        } else if (outcome == Outcome.Draw) {
+            drawBets[user] += amount;
+            drawPool += amount;
+        } else {
+            sideBBets[user] += amount;
+            sideBPool += amount;
+        }
+
+        emit BetPlaced(user, outcome, amount, 0);
     }
 
     function resolve() external afterEnd {

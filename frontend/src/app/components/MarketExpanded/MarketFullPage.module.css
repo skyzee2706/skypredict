@@ -240,6 +240,90 @@
     border-radius: 3px;
 }
 
+.sportsProgressSection {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sportsProbabilityText,
+.sportsOutcomeLabels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    min-width: 0;
+}
+
+.sportsProbabilityText {
+    margin-bottom: 8px;
+    font-size: 15px;
+    font-weight: 900;
+}
+
+.sportsProbabilityText span,
+.sportsOutcomeLabels span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.sportsProbYes {
+    color: var(--success);
+}
+
+.sportsProbDraw {
+    color: hsl(43, 96%, 62%);
+}
+
+.sportsProbNo {
+    color: var(--danger);
+}
+
+.sportsBarBackground {
+    display: flex;
+    gap: 2px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 8px;
+    padding: 1px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--section-bg) 78%, transparent);
+    border: 1px solid var(--card-border);
+}
+
+.sportsBarYes,
+.sportsBarDraw,
+.sportsBarNo {
+    min-width: 2px;
+    height: 100%;
+    border-radius: 999px;
+}
+
+.sportsBarYes {
+    background: var(--success);
+}
+
+.sportsBarDraw {
+    background: hsl(43, 96%, 62%);
+}
+
+.sportsBarNo {
+    background: var(--danger);
+}
+
+.sportsOutcomeLabels {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+}
+
 .volumeRow {
     display: flex;
     justify-content: space-between;

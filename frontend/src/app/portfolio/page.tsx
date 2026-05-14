@@ -74,30 +74,14 @@ export default function PortfolioPage() {
         };
     }, [cachedPortfolio, positions]);
 
+    // Portfolio is app-level: we fetch all markets and batch check positions.
+    // No external API needed — everything comes from on-chain via batched hooks.
     useEffect(() => {
         if (!address) {
             setCachedPortfolio(null);
             return;
         }
-
-        let cancelled = false;
-        async function loadCachedPortfolio() {
-            try {
-                const response = await fetch(`/api/portfolio/${address}`);
-                if (!response.ok) return;
-                const data = await response.json() as CachedPortfolioResponse;
-                if (!cancelled) setCachedPortfolio(data);
-            } catch (error) {
-                console.error('Portfolio cache fetch failed:', error);
-            }
-        }
-
-        loadCachedPortfolio();
-        const interval = setInterval(loadCachedPortfolio, 60_000);
-        return () => {
-            cancelled = true;
-            clearInterval(interval);
-        };
+        // No cached portfolio API needed — batched hooks handle everything
     }, [address]);
 
     useEffect(() => {

@@ -5,7 +5,7 @@ import { wagmiConfig } from './wagmiConfig';
 import type { MarketData, MarketState } from '../../data/markets';
 import MarketFactoryArtifact from '../../lib/contracts/MarketFactory.json';
 import PredictionMarketArtifact from '../../lib/contracts/PredictionMarket.json';
-import { FACTORY_ADDRESS } from '../constants';
+import { FACTORY_ADDRESS, SKYUSD_MULTIPLIER } from '../constants';
 
 const FACTORY_ABI = MarketFactoryArtifact.abi as unknown as Abi;
 const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
@@ -50,17 +50,18 @@ async function safeRead<T>(marketAddress: `0x${string}`, functionName: string, f
   }
 }
 
-/** Detect if this market is a sports market by checking if `marketType` returns 'SPORTS' */
-function isSportsMarket(question: string, marketTypeRaw: string): boolean {
+/** Detect market type from on-chain marketType field */
+function detectMarketCategory(question: string, marketTypeRaw: string): { type: 'crypto' | 'sport' | 'politics' | 'other'; category: 'CRYPTO' | 'SPORTS' | 'POLITICS' } {
   const mt = String(marketTypeRaw).toUpperCase();
-  if (mt === 'SPORTS') return true;
-  // Fallback heuristic: "X vs Y" pattern
-  if (question.includes(' vs ')) return true;
-  return false;
+  if (mt === 'POLITICS') return { type: 'politics', category: 'POLITICS' };
+  if (mt === 'SPORTS') return { type: 'sport', category: 'SPORTS' };
+  if (mt === 'CRYPTO') return { type: 'crypto', category: 'CRYPTO' };
+  // Fallback heuristic
+  if (question.includes(' vs ')) return { type: 'sport', category: 'SPORTS' };
+  return { type: 'crypto', category: 'CRYPTO' };
 }
 
 export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<MarketData> {
-  // Read core fields (always present in both old and new contracts)
   const [
     question,
     strikePriceRaw,
@@ -81,7 +82,6 @@ export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<Mar
     safeRead<bigint>(marketAddress, 'settlementPrice', 0n)
   ]);
 
-  // Read new 3-way fields (may fail on old contracts, hence safeRead)
   const [
     drawPoolRaw,
     sideANameRaw,
@@ -103,20 +103,22 @@ export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<Mar
   ]);
 
   const q = String(question);
-  const isSport = isSportsMarket(q, String(marketTypeRaw));
+  const { type: marketType, category } = detectMarketCategory(q, String(marketTypeRaw));
+  const isSport = category === 'SPORTS';
+  const isPolitics = category === 'POLITICS';
 
   // Side labels
   const sideAName = String(sideANameRaw) || 'YES';
   const drawName = String(drawNameRaw) || 'Draw';
   const sideBName = String(sideBNameRaw) || 'NO';
 
-  // Pool values
+  // Pool values — 18 decimal
   const strikePrice = Number(strikePriceRaw) / 1e8;
   const endTime = Number(endTimeRaw);
   const bettingEndTime = Number(bettingEndTimeRaw);
-  const sideAPool = Number(yesPoolRaw) / 1e6;
-  const drawPool = Number(drawPoolRaw) / 1e6;
-  const sideBPool = Number(noPoolRaw) / 1e6;
+  const sideAPool = Number(yesPoolRaw) / SKYUSD_MULTIPLIER;
+  const drawPool = Number(drawPoolRaw) / SKYUSD_MULTIPLIER;
+  const sideBPool = Number(noPoolRaw) / SKYUSD_MULTIPLIER;
   const totalVolume = sideAPool + drawPool + sideBPool;
   const duration = inferDuration(q);
   const state = computeState(Boolean(resolved), bettingEndTime, endTime);
@@ -125,12 +127,10 @@ export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<Mar
   const winnerIndex = Number(winningOutcomeRaw);
   let resolvedOutcome: string | undefined;
   if (Boolean(resolved)) {
-    // New contracts store winningOutcome as enum (0=SideA, 1=Draw, 2=SideB)
     if (winnerIndex === 1) resolvedOutcome = drawName;
     else if (winnerIndex === 2) resolvedOutcome = sideBName;
     else resolvedOutcome = sideAName;
 
-    // Fallback for old contracts that only have `result` bool
     if (!String(marketTypeRaw) && winnerIndex === 0) {
       resolvedOutcome = Boolean(resultRaw) ? sideAName : sideBName;
     }
@@ -142,10 +142,9 @@ export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<Mar
     probA = sideAPool / totalVolume;
     probD = drawPool / totalVolume;
     probB = sideBPool / totalVolume;
-  } else if (isSport) {
+  } else if (isSport || isPolitics) {
     probA = 0.4; probD = 0.2; probB = 0.4;
   } else {
-    // Use yesPrice from old contract if available
     const yp = Number(yesPriceRaw) / 1e16;
     probA = yp > 0 && yp <= 100 ? yp / 100 : 0.5;
     probD = 0;
@@ -156,31 +155,35 @@ export async function fetchMarketInfo(marketAddress: `0x${string}`): Promise<Mar
     id: marketAddress,
     contractId: marketAddress,
     title: q,
-    ticker: isSport ? 'SPORT' : inferTicker(q),
+    ticker: (isSport || isPolitics) ? (isSport ? 'SPORT' : 'POLITICS') : inferTicker(q),
     sideAName,
     drawName,
     sideBName,
-    description: isSport
-      ? `Football match — market closes at kickoff.`
-      : `Resolves via median of 10 exchange prices at market close.`,
-    type: isSport ? 'sport' : 'crypto',
-    category: isSport ? 'SPORTS' : 'CRYPTO',
-    identifier: isSport ? q.replace(/\s+/g, '-').toLowerCase() : `${inferTicker(q)}USDT`,
+    description: isPolitics
+      ? `Political prediction market — resolved manually by admin.`
+      : isSport
+        ? `Football match — market closes at kickoff.`
+        : `Resolves via median of 10 exchange prices at market close.`,
+    type: marketType,
+    category,
+    identifier: (isSport || isPolitics) ? q.replace(/\s+/g, '-').toLowerCase() : `${inferTicker(q)}USDT`,
     creationDate: Math.max(0, endTime - duration),
     deadline: endTime,
     deadlineDate: endTime > 0 ? new Date(endTime * 1000).toISOString() : undefined,
     bettingEndTime,
-    strikePrice: isSport ? undefined : strikePrice,
-    resolutionSource: isSport ? 'Live score API' : 'Median 10 exchanges',
-    resolutionRule: isSport
-      ? `${sideAName} wins if they win, ${drawName} if level, ${sideBName} if they win.`
-      : `${sideAName} wins when price >= strike at close.`,
+    strikePrice: (isSport || isPolitics) ? undefined : strikePrice,
+    resolutionSource: isPolitics ? 'Admin manual' : isSport ? 'Live score API' : 'Median 10 exchanges',
+    resolutionRule: isPolitics
+      ? `Resolved manually by platform admin based on real-world outcome.`
+      : isSport
+        ? `${sideAName} wins if they win, ${drawName} if level, ${sideBName} if they win.`
+        : `${sideAName} wins when price >= strike at close.`,
     liquidity: totalVolume,
     volume: totalVolume,
     state,
     resolvedOutcome,
-    deadlinePrice: !isSport && Boolean(resolved) ? Number(settlementPriceRaw) / 1e8 : undefined,
-    priceSymbol: isSport ? '' : '$',
+    deadlinePrice: !(isSport || isPolitics) && Boolean(resolved) ? Number(settlementPriceRaw) / 1e8 : undefined,
+    priceSymbol: (isSport || isPolitics) ? '' : '$',
     probYes: probA,
     probDraw: probD,
     probNo: probB,
@@ -210,7 +213,6 @@ export async function fetchAllMarkets(
 ): Promise<MarketData[]> {
   const addresses = await fetchAllMarketsRaw();
   
-  // Chunking to prevent RPC 429 errors
   const chunkArray = <T,>(arr: T[], size: number): T[][] => {
       return arr.reduce((acc, _, i) => {
           if (i % size === 0) acc.push(arr.slice(i, i + size));
@@ -233,7 +235,6 @@ export async function fetchAllMarkets(
           })
       );
       allMarkets.push(...chunkResults.filter((m): m is MarketData => m !== null));
-      // Add a 200ms delay between chunks to avoid 429 Too Many Requests
       await new Promise(r => setTimeout(r, 200));
   }
 

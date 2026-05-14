@@ -20,7 +20,7 @@ interface MarketDetailPanelProps {
     // Legacy props for backwards compatibility
     marketTitle?: string;
     probability?: number;
-    type?: 'crypto' | 'stock' | 'sport' | 'other';
+    type?: 'crypto' | 'stock' | 'sport' | 'politics' | 'other';
     identifier?: string;
     description?: string;
     volume?: number;
@@ -189,21 +189,51 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
         );
     };
 
-    const renderProgressBar = () => (
-        <div className={styles.progressBarContainer}>
-            <div className={styles.probabilityText}>
-                <span style={{ color: 'var(--foreground)' }}>{probability.toFixed(1)}%</span>
-                <span style={{ color: 'var(--text-secondary)' }}>{(100 - probability).toFixed(1)}%</span>
+    const renderProgressBar = () => {
+        const isThreeWaySport = market?.category === 'SPORTS' && typeof market.probDraw === 'number';
+
+        if (isThreeWaySport) {
+            const probYes = market.probYes * 100;
+            const probDraw = (market.probDraw ?? 0) * 100;
+            const probNo = market.probNo * 100;
+
+            return (
+                <div className={`${styles.progressBarContainer} ${styles.sportsProgressBarContainer}`}>
+                    <div className={styles.sportsProbabilityText}>
+                        <span className={styles.sportsProbYes}>{probYes.toFixed(1)}%</span>
+                        <span className={styles.sportsProbDraw}>{probDraw.toFixed(1)}%</span>
+                        <span className={styles.sportsProbNo}>{probNo.toFixed(1)}%</span>
+                    </div>
+                    <div className={styles.sportsBarBackground}>
+                        <div className={styles.sportsBarYes} style={{ flexGrow: Math.max(probYes, 0.01) }} />
+                        <div className={styles.sportsBarDraw} style={{ flexGrow: Math.max(probDraw, 0.01) }} />
+                        <div className={styles.sportsBarNo} style={{ flexGrow: Math.max(probNo, 0.01) }} />
+                    </div>
+                    <div className={styles.sportsOutcomeLabels}>
+                        <span title={market?.sideAName ?? 'Home'}>{market?.sideAName ?? 'Home'}</span>
+                        <span title={market?.drawName ?? 'Draw'}>{market?.drawName ?? 'Draw'}</span>
+                        <span title={market?.sideBName ?? 'Away'}>{market?.sideBName ?? 'Away'}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <div className={styles.progressBarContainer}>
+                <div className={styles.probabilityText}>
+                    <span style={{ color: 'var(--foreground)' }}>{probability.toFixed(1)}%</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{(100 - probability).toFixed(1)}%</span>
+                </div>
+                <div className={styles.barBackground}>
+                    <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
+                </div>
+                <div className={styles.binaryOutcomeLabels}>
+                    <span title={market?.sideAName ?? 'Side A'}>{market?.sideAName ?? 'Side A'}</span>
+                    <span title={market?.sideBName ?? 'Side B'}>{market?.sideBName ?? 'Side B'}</span>
+                </div>
             </div>
-            <div className={styles.barBackground}>
-                <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '4px' }}>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideAName ?? 'Side A'}</span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>{market?.sideBName ?? 'Side B'}</span>
-            </div>
-        </div>
-    );
+        );
+    };
 
     const renderFinishedMarketPosition = () => {
         const position = userStatus?.position;
@@ -337,29 +367,32 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
                         <TradeBox probability={probability} market={market} />
                         {market && <UserBetDisplay market={market} variant="compact" />}
                         {isSport ? (
-                            <div className={styles.liveScoreboardDetail} style={{ margin: '16px 0', border: '1px solid var(--border)', background: 'var(--bg-card)', padding: '24px', borderRadius: '24px' }}>
-                                <div className={styles.liveScoreboardMeta}>
-                                    <span className={styles.liveScoreboardStatus}>
-                                        {liveScore && (liveScore.status === 'IN_PLAY' || liveScore.status === 'PAUSED') ? <span className={styles.liveBlinker}></span> : null} 
-                                        {liveScore?.status === 'TIMED' || liveScore?.status === 'SCHEDULED' 
-                                            ? 'Belum mulai' 
+                            <div className={styles.liveScorePreviewCard}>
+                                <div className={styles.liveScorePreviewHeader}>
+                                    <span className={styles.liveScorePreviewEyebrow}>Match status</span>
+                                    <span className={`${styles.liveScorePreviewStatus} ${liveScore && (liveScore.status === 'IN_PLAY' || liveScore.status === 'PAUSED') ? styles.liveScorePreviewStatusActive : ''}`}>
+                                        {liveScore && (liveScore.status === 'IN_PLAY' || liveScore.status === 'PAUSED') ? <span className={styles.liveBlinker}></span> : null}
+                                        {liveScore?.status === 'TIMED' || liveScore?.status === 'SCHEDULED'
+                                            ? 'Not started'
                                             : (liveScore?.elapsed ? `${liveScore.elapsed}` : (liveScore?.status || 'Loading...'))}
                                     </span>
-                                    {liveScore?.utcDate && (liveScore.status === 'TIMED' || liveScore.status === 'SCHEDULED') && (
-                                        <span className={styles.liveScoreboardLeague}>
-                                            Kickoff: {new Date(liveScore.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    )}
                                 </div>
-                                <div className={styles.liveScoreboardScoreRow}>
-                                    <div className={styles.liveScoreboardTeam}>
-                                        <span className={styles.liveScoreboardTeamName}>{liveScore?.homeTeam || market?.sideAName || 'Home'}</span>
-                                        <span className={styles.liveScoreboardGoals}>{liveScore?.homeGoals ?? '-'}</span>
+
+                                {liveScore?.utcDate && (liveScore.status === 'TIMED' || liveScore.status === 'SCHEDULED') && (
+                                    <div className={styles.liveScorePreviewKickoff}>
+                                        Kickoff · {new Date(liveScore.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </div>
-                                    <span className={styles.liveScoreboardSeparator}>-</span>
-                                    <div className={styles.liveScoreboardTeam}>
-                                        <span className={styles.liveScoreboardGoals}>{liveScore?.awayGoals ?? '-'}</span>
-                                        <span className={styles.liveScoreboardTeamName}>{liveScore?.awayTeam || market?.sideBName || 'Away'}</span>
+                                )}
+
+                                <div className={styles.liveScorePreviewTeams}>
+                                    <div className={styles.liveScorePreviewTeam}>
+                                        <span className={styles.liveScorePreviewTeamName}>{liveScore?.homeTeam || market?.sideAName || 'Home'}</span>
+                                        <span className={styles.liveScorePreviewGoals}>{liveScore?.homeGoals ?? '—'}</span>
+                                    </div>
+                                    <span className={styles.liveScorePreviewDivider}>vs</span>
+                                    <div className={styles.liveScorePreviewTeam}>
+                                        <span className={styles.liveScorePreviewTeamName}>{liveScore?.awayTeam || market?.sideBName || 'Away'}</span>
+                                        <span className={styles.liveScorePreviewGoals}>{liveScore?.awayGoals ?? '—'}</span>
                                     </div>
                                 </div>
                             </div>

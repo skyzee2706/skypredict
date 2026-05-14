@@ -1,4 +1,4 @@
-﻿.panel {
+.panel {
     background-color: color-mix(in srgb, var(--background-soft) 92%, transparent);
     border-left: 1px solid var(--divider);
     height: 100%;
@@ -110,6 +110,108 @@
     height: 100%;
     background-color: color-mix(in srgb, var(--success) 86%, #ffffff);
     border-radius: 3px;
+}
+
+.binaryOutcomeLabels {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 4px;
+    min-width: 0;
+}
+
+.binaryOutcomeLabels span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.sportsProgressBarContainer {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+}
+
+.sportsProbabilityText,
+.sportsOutcomeLabels {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+}
+
+.sportsProbabilityText {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.sportsProbabilityText span,
+.sportsOutcomeLabels span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+}
+
+.sportsProbYes {
+    color: var(--success);
+}
+
+.sportsProbDraw {
+    color: hsl(43, 96%, 62%);
+}
+
+.sportsProbNo {
+    color: var(--danger);
+}
+
+.sportsBarBackground {
+    display: flex;
+    gap: 2px;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 7px;
+    padding: 1px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: color-mix(in srgb, var(--section-bg) 76%, transparent);
+    border: 1px solid var(--card-border);
+    box-sizing: border-box;
+}
+
+.sportsBarYes,
+.sportsBarDraw,
+.sportsBarNo {
+    min-width: 2px;
+    height: 100%;
+    border-radius: 999px;
+}
+
+.sportsBarYes {
+    background: var(--success);
+}
+
+.sportsBarDraw {
+    background: hsl(43, 96%, 62%);
+}
+
+.sportsBarNo {
+    background: var(--danger);
+}
+
+.sportsOutcomeLabels {
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-secondary);
 }
 
 .volumeRow {
@@ -979,5 +1081,135 @@
     font-size: 13px;
     color: var(--text-secondary);
     line-height: 1.5;
+}
+
+.liveScorePreviewCard {
+    margin: 16px 0;
+    padding: 16px;
+    border-radius: 18px;
+    border: 1px solid var(--card-border);
+    background:
+        radial-gradient(circle at 18% 12%, color-mix(in srgb, var(--success) 16%, transparent), transparent 36%),
+        linear-gradient(135deg, color-mix(in srgb, var(--section-bg) 86%, transparent), color-mix(in srgb, var(--card-bg) 94%, transparent));
+    box-shadow: var(--shadow-card), var(--shadow-inset);
+    overflow: hidden;
+}
+
+.liveScorePreviewHeader {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.liveScorePreviewEyebrow {
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+}
+
+.liveScorePreviewStatus {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid var(--card-border-hover);
+    background: color-mix(in srgb, var(--surface-elevated) 82%, transparent);
+    color: var(--foreground);
+    font-size: 11px;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.liveScorePreviewStatusActive {
+    border-color: color-mix(in srgb, var(--success) 62%, var(--card-border));
+    background: color-mix(in srgb, var(--success) 16%, var(--surface-elevated));
+    color: color-mix(in srgb, var(--success) 86%, #ffffff);
+}
+
+.liveBlinker {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: var(--success);
+    box-shadow: 0 0 14px color-mix(in srgb, var(--success) 72%, transparent);
+    animation: livePulse 1.2s ease-in-out infinite;
+}
+
+.liveScorePreviewKickoff {
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 750;
+    color: var(--text-secondary);
+}
+
+.liveScorePreviewTeams {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr);
+    align-items: stretch;
+    gap: 8px;
+}
+
+.liveScorePreviewTeam {
+    min-width: 0;
+    padding: 12px 10px;
+    border-radius: 14px;
+    border: 1px solid var(--card-border);
+    background: color-mix(in srgb, var(--surface-elevated) 70%, transparent);
+    display: grid;
+    gap: 8px;
+    justify-items: center;
+}
+
+.liveScorePreviewTeamName {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--foreground);
+    text-align: center;
+}
+
+.liveScorePreviewGoals {
+    font-size: 28px;
+    line-height: 0.9;
+    font-weight: 950;
+    letter-spacing: -0.06em;
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+}
+
+.liveScorePreviewDivider {
+    align-self: center;
+    justify-self: center;
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: color-mix(in srgb, var(--card-bg) 88%, transparent);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+@keyframes livePulse {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+
+    50% {
+        opacity: 0.45;
+        transform: scale(0.82);
+    }
 }
 

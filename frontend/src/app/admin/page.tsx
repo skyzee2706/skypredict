@@ -6,10 +6,10 @@ import styles from './page.module.css';
 import Header from '../components/Header/Header';
 import { useWallet } from '../providers/WalletProvider';
 import { fetchAllMarkets } from '../../lib/onchain/reads';
-import { createBet, resolveBet, setCreatorApproval } from '../../lib/onchain/adminWrites';
+import { createBet, createMarketWithOutcomes, resolveBet, resolveWithOutcome, setCreatorApproval } from '../../lib/onchain/adminWrites';
 import { formatResolutionDate } from '../../utils/formatters';
 import { MarketData } from '../../data/markets';
-import { getFaucetFeeBalance, withdrawFaucetFees } from '../../lib/onchain/writes';
+import { getDepositBalance, withdrawDepositFunds } from '../../lib/onchain/writes';
 import { TOKEN_ADDRESS } from '../../lib/constants';
 import { formatEther } from 'viem';
 
@@ -21,21 +21,23 @@ const AdminPage: React.FC = () => {
     const [creating, setCreating] = useState(false);
     const [approving, setApproving] = useState(false);
     const [resolvingId, setResolvingId] = useState<string | null>(null);
-    const [feeBalance, setFeeBalance] = useState<bigint>(0n);
-    const [withdrawingFees, setWithdrawingFees] = useState(false);
+    const [depositBal, setDepositBal] = useState<bigint>(0n);
+    const [withdrawingFunds, setWithdrawingFunds] = useState(false);
 
+    const [formType, setFormType] = useState<'CRYPTO' | 'SPORTS' | 'POLITICS'>('CRYPTO');
     const [form, setForm] = useState({
         title: '',
         resolutionCriteria: '',
         sideAName: '',
+        drawName: '',
         sideBName: '',
         endDate: '',
-        resolutionType: '0',
         symbol: '',
         tokenName: ''
     });
 
     const [newAdmin, setNewAdmin] = useState({ address: '', approved: true });
+    const [resolveOutcome, setResolveOutcome] = useState<Record<string, string>>({});
 
     const owner = process.env.NEXT_PUBLIC_OWNER_ADDRESS?.toLowerCase() || '';
     const isOwner = walletAddress && walletAddress.toLowerCase() === owner;
@@ -52,18 +54,18 @@ const AdminPage: React.FC = () => {
 
     useEffect(() => {
         loadMarkets();
-        getFaucetFeeBalance().then(setFeeBalance).catch(() => setFeeBalance(0n));
+        getDepositBalance().then(setDepositBal).catch(() => setDepositBal(0n));
     }, []);
 
-    const handleWithdrawFees = async () => {
+    const handleWithdrawFunds = async () => {
         if (!isOwner || !walletAddress) return;
-        setWithdrawingFees(true);
+        setWithdrawingFunds(true);
         try {
-            await withdrawFaucetFees(walletAddress as `0x${string}`);
-            const balance = await getFaucetFeeBalance();
-            setFeeBalance(balance);
+            await withdrawDepositFunds(walletAddress as `0x${string}`);
+            const balance = await getDepositBalance();
+            setDepositBal(balance);
         } finally {
-            setWithdrawingFees(false);
+            setWithdrawingFunds(false);
         }
     };
 
@@ -76,18 +78,29 @@ const AdminPage: React.FC = () => {
             const endDateMs = new Date(form.endDate).getTime();
             const endDateSeconds = Math.floor(endDateMs / 1000);
 
-            // Old contract flow running on Ritual Network
-            await createBet({
-                title: form.title,
-                resolutionCriteria: form.resolutionCriteria,
-                sideAName: form.sideAName,
-                sideBName: form.sideBName,
-                endDate: endDateSeconds,
-                resolutionType: Number(form.resolutionType),
-                resolutionData: '0x'
-            });
+            if (formType === 'CRYPTO') {
+                await createBet({
+                    title: form.title,
+                    resolutionCriteria: form.resolutionCriteria,
+                    sideAName: form.sideAName || 'YES',
+                    sideBName: form.sideBName || 'NO',
+                    endDate: endDateSeconds,
+                    resolutionType: 0,
+                    resolutionData: '0x'
+                });
+            } else {
+                await createMarketWithOutcomes({
+                    question: form.title,
+                    sideAName: form.sideAName || (formType === 'SPORTS' ? 'Home' : 'Yes'),
+                    drawName: form.drawName || 'Draw',
+                    sideBName: form.sideBName || (formType === 'SPORTS' ? 'Away' : 'No'),
+                    marketType: formType,
+                    endDate: endDateSeconds,
+                });
+            }
 
             await loadMarkets();
+            setForm({ title: '', resolutionCriteria: '', sideAName: '', drawName: '', sideBName: '', endDate: '', symbol: '', tokenName: '' });
         } finally {
             setCreating(false);
         }
@@ -107,7 +120,13 @@ const AdminPage: React.FC = () => {
         if (!isOwner) return;
         setResolvingId(market.id);
         try {
-            await resolveBet(market.contractId as `0x${string}`);
+            if (market.category === 'POLITICS') {
+                const outcomeStr = resolveOutcome[market.id] || '0';
+                const outcome = parseInt(outcomeStr) as 0 | 1 | 2;
+                await resolveWithOutcome(market.contractId as `0x${string}`, outcome);
+            } else {
+                await resolveBet(market.contractId as `0x${string}`);
+            }
             await loadMarkets();
         } finally {
             setResolvingId(null);
@@ -147,35 +166,60 @@ const AdminPage: React.FC = () => {
         <>
             <Header onNavigate={(page) => (page === 'landing' ? router.push('/') : router.push('/markets'))} currentPage="markets" />
             <div className={styles.page}>
+                {/* Treasury */}
                 <div className={styles.card}>
-                    <div className={styles.sectionTitle}>Faucet Fee Treasury</div>
+                    <div className={styles.sectionTitle}>Deposit Fund Treasury</div>
                     <div className={styles.muted}>Token contract: {TOKEN_ADDRESS}</div>
-                    <div className={styles.treasuryAmount}>{formatEther(feeBalance)} RITUAL</div>
-                    <button className={styles.button} onClick={handleWithdrawFees} disabled={withdrawingFees || feeBalance === 0n}>
-                        {withdrawingFees ? 'Withdrawing...' : 'Withdraw faucet fees'}
+                    <div className={styles.treasuryAmount}>{formatEther(depositBal)} RITUAL</div>
+                    <div className={styles.muted} style={{ marginBottom: '12px' }}>Total RITUAL accumulated from user deposits</div>
+                    <button className={styles.button} onClick={handleWithdrawFunds} disabled={withdrawingFunds || depositBal === 0n}>
+                        {withdrawingFunds ? 'Withdrawing...' : 'Withdraw deposit funds'}
                     </button>
                 </div>
 
+                {/* Create Market */}
                 <div className={styles.card}>
-                    <div className={styles.sectionTitle}>Create Bet</div>
-                    <div className={styles.formGrid}>
-                        <input className={styles.input} placeholder="Title" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
-                        <input className={styles.input} placeholder="Side A name" value={form.sideAName} onChange={(e) => setForm({ ...form, sideAName: e.target.value })} />
-                        <input className={styles.input} placeholder="Side B name" value={form.sideBName} onChange={(e) => setForm({ ...form, sideBName: e.target.value })} />
-                        <input className={styles.input} type="datetime-local" placeholder="End date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
-                        <select className={styles.input} value={form.resolutionType} onChange={(e) => setForm({ ...form, resolutionType: e.target.value })}>
-                            <option value="0">CRYPTO</option>
-                            <option value="1">STOCKS</option>
-                        </select>
-                        <input className={styles.input} placeholder="Symbol (e.g., BTC or AAPL)" value={form.symbol} onChange={(e) => setForm({ ...form, symbol: e.target.value })} />
-                        <input className={styles.input} placeholder="Name (e.g., Bitcoin)" value={form.tokenName} onChange={(e) => setForm({ ...form, tokenName: e.target.value })} />
+                    <div className={styles.sectionTitle}>Create Market</div>
+                    
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                        {(['CRYPTO', 'SPORTS', 'POLITICS'] as const).map((type) => (
+                            <button
+                                key={type}
+                                onClick={() => setFormType(type)}
+                                style={{
+                                    padding: '10px 18px',
+                                    borderRadius: '10px',
+                                    border: formType === type ? '2px solid var(--primary)' : '1px solid var(--border)',
+                                    background: formType === type ? 'rgba(34,197,94,0.15)' : 'var(--bg-card)',
+                                    color: 'var(--text-primary)',
+                                    cursor: 'pointer',
+                                    fontWeight: 800,
+                                    fontSize: '13px'
+                                }}
+                            >
+                                {type}
+                            </button>
+                        ))}
                     </div>
-                    <textarea className={styles.textarea} placeholder="Resolution criteria" value={form.resolutionCriteria} onChange={(e) => setForm({ ...form, resolutionCriteria: e.target.value })} />
+
+                    <div className={styles.formGrid}>
+                        <input className={styles.input} placeholder={formType === 'CRYPTO' ? 'Will BTC/USD be above $100,000 by...' : formType === 'SPORTS' ? 'Team A vs Team B' : 'Will X happen by...?'} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} />
+                        <input className={styles.input} placeholder={formType === 'CRYPTO' ? 'Side A (YES)' : formType === 'SPORTS' ? 'Home Team' : 'Yes / Option A'} value={form.sideAName} onChange={(e) => setForm({ ...form, sideAName: e.target.value })} />
+                        {(formType === 'SPORTS' || formType === 'POLITICS') && (
+                            <input className={styles.input} placeholder="Draw (optional for politics)" value={form.drawName} onChange={(e) => setForm({ ...form, drawName: e.target.value })} />
+                        )}
+                        <input className={styles.input} placeholder={formType === 'CRYPTO' ? 'Side B (NO)' : formType === 'SPORTS' ? 'Away Team' : 'No / Option B'} value={form.sideBName} onChange={(e) => setForm({ ...form, sideBName: e.target.value })} />
+                        <input className={styles.input} type="datetime-local" placeholder="End date" value={form.endDate} onChange={(e) => setForm({ ...form, endDate: e.target.value })} />
+                    </div>
+                    {formType === 'CRYPTO' && (
+                        <textarea className={styles.textarea} placeholder="Resolution criteria (optional)" value={form.resolutionCriteria} onChange={(e) => setForm({ ...form, resolutionCriteria: e.target.value })} />
+                    )}
                     <button className={styles.button} onClick={handleCreate} disabled={creating}>
-                        {creating ? 'Creating...' : 'Create bet'}
+                        {creating ? 'Creating...' : `Create ${formType.toLowerCase()} market`}
                     </button>
                 </div>
 
+                {/* Approve Creator */}
                 <div className={styles.card}>
                     <div className={styles.sectionTitle}>Approve Creator</div>
                     <div className={styles.formGrid}>
@@ -190,8 +234,9 @@ const AdminPage: React.FC = () => {
                     </button>
                 </div>
 
+                {/* Resolve Markets */}
                 <div className={styles.card}>
-                    <div className={styles.sectionTitle}>Resolve Bets</div>
+                    <div className={styles.sectionTitle}>Resolve Markets</div>
                     {loadingMarkets ? (
                         <div className={styles.muted}>Loading markets...</div>
                     ) : (
@@ -199,20 +244,43 @@ const AdminPage: React.FC = () => {
                             {visibleMarkets.map((m, idx) => {
                                 const deadline = typeof m.deadline === 'string' ? parseInt(m.deadline, 10) : m.deadline;
                                 const deadlinePassed = Date.now() >= deadline * 1000;
+                                const isPolitics = m.category === 'POLITICS';
+                                const isResolved = m.state === 'RESOLVED';
+                                const canResolve = deadlinePassed && !isResolved;
+
                                 return (
                                     <div key={m.contractId || m.id || idx} className={styles.marketRow}>
                                         <div className={styles.marketMeta}>
                                             <div style={{ fontWeight: 700 }}>{m.title}</div>
-                                            <div className={styles.muted}>Deadline: {formatResolutionDate(deadline) ?? '-'}</div>
-                                            <div className={styles.muted}>State: {m.state}</div>
+                                            <div className={styles.muted}>
+                                                Deadline: {formatResolutionDate(deadline) ?? '-'} · 
+                                                Type: <b>{m.category}</b> · 
+                                                State: {m.state}
+                                                {isResolved && m.resolvedOutcome && ` · Winner: ${m.resolvedOutcome}`}
+                                            </div>
                                         </div>
-                                        <button
-                                            className={`${styles.button} ${!deadlinePassed ? styles.muted : ''}`}
-                                            onClick={() => handleResolve(m)}
-                                            disabled={!deadlinePassed || resolvingId === m.id}
-                                        >
-                                            {resolvingId === m.id ? 'Resolving...' : 'Resolve'}
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                            {isPolitics && canResolve && (
+                                                <select
+                                                    className={styles.input}
+                                                    style={{ width: '140px', padding: '8px' }}
+                                                    value={resolveOutcome[m.id] || '0'}
+                                                    onChange={(e) => setResolveOutcome({ ...resolveOutcome, [m.id]: e.target.value })}
+                                                >
+                                                    <option value="0">{m.sideAName || 'Side A'}</option>
+                                                    <option value="1">{m.drawName || 'Draw'}</option>
+                                                    <option value="2">{m.sideBName || 'Side B'}</option>
+                                                </select>
+                                            )}
+                                            <button
+                                                className={`${styles.button} ${!canResolve ? styles.muted : ''}`}
+                                                onClick={() => handleResolve(m)}
+                                                disabled={!canResolve || resolvingId === m.id}
+                                                title={!isPolitics && (m.category === 'SPORTS' || m.category === 'CRYPTO') ? 'Auto-resolved by scheduler' : ''}
+                                            >
+                                                {resolvingId === m.id ? 'Resolving...' : isPolitics ? 'Resolve (Manual)' : 'Resolve'}
+                                            </button>
+                                        </div>
                                     </div>
                                 );
                             })}

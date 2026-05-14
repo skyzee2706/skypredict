@@ -17,15 +17,15 @@ const ProbabilityGauge: React.FC<ProbabilityGaugeProps> = ({ probability, market
         return (
             <div className={styles.sportsOdds} aria-label="Sports market odds">
                 <div className={`${styles.sportsOutcome} ${styles.sideAOutcome}`}>
-                    <span className={styles.outcomeLabel}>{market.sideAName ?? 'Home'}</span>
+                    <span className={styles.outcomeLabel}>Home</span>
                     <strong>{probYes}%</strong>
                 </div>
                 <div className={`${styles.sportsOutcome} ${styles.drawOutcome}`}>
-                    <span className={styles.outcomeLabel}>{market.drawName ?? 'Draw'}</span>
+                    <span className={styles.outcomeLabel}>Draw</span>
                     <strong>{probDraw}%</strong>
                 </div>
                 <div className={`${styles.sportsOutcome} ${styles.sideBOutcome}`}>
-                    <span className={styles.outcomeLabel}>{market.sideBName ?? 'Away'}</span>
+                    <span className={styles.outcomeLabel}>Away</span>
                     <strong>{probNo}%</strong>
                 </div>
             </div>

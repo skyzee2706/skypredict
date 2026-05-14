@@ -3,16 +3,31 @@ import MarketFactoryAbi from './contracts/MarketFactory.json';
 
 export const TOKEN_ADDRESS =
   (process.env.NEXT_PUBLIC_SKYUSD_ADDRESS ||
-    process.env.NEXT_PUBLIC_TOKEN_ADDRESS ||
-    process.env.NEXT_PUBLIC_USDL_ADDRESS ||
-    '0xFb756Aa348c59424ED3D5f820C7b4790cd176eED') as `0x${string}`;
+    '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
 export const FACTORY_ADDRESS =
   (process.env.NEXT_PUBLIC_FACTORY_ADDRESS ||
-    process.env.NEXT_PUBLIC_BET_FACTORY_ADDRESS ||
     '0x0000000000000000000000000000000000000000') as `0x${string}`;
 
 export const FACTORY_ABI = MarketFactoryAbi.abi as unknown as Abi;
+
+export const ROUTER_ADDRESS =
+  (process.env.NEXT_PUBLIC_ROUTER_ADDRESS ||
+    '0x0000000000000000000000000000000000000000') as `0x${string}`;
+
+export const ROUTER_ABI = [
+  {
+    type: 'function',
+    name: 'placeBet',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'marketAddress', type: 'address', internalType: 'address' },
+      { name: 'outcome', type: 'uint8', internalType: 'enum PredictionMarket.Outcome' },
+      { name: 'amount', type: 'uint256', internalType: 'uint256' }
+    ],
+    outputs: []
+  }
+] as const satisfies Abi;
 
 export const TOKEN_SYMBOL = 'SkyUSD';
 
@@ -46,8 +61,11 @@ export const ERC20_ABI = [
   }
 ] as const satisfies Abi;
 
-export const SKYUSD_DECIMALS = 6;
-export const SKYUSD_MULTIPLIER = 1_000_000;
+export const SKYUSD_DECIMALS = 18;
+export const SKYUSD_MULTIPLIER = 1_000_000_000_000_000_000; // 1e18
+
+export const DEPOSIT_FEE = 0.01; // RITUAL
+export const DEPOSIT_AMOUNT = 100; // SkyUSD received per 0.01 RITUAL
 
 export const SKYUSD_ABI = [
   {
@@ -79,17 +97,10 @@ export const SKYUSD_ABI = [
   },
   {
     type: 'function',
-    name: 'faucet',
+    name: 'deposit',
     stateMutability: 'payable',
-    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
+    inputs: [],
     outputs: []
-  },
-  {
-    type: 'function',
-    name: 'cooldownRemaining',
-    stateMutability: 'view',
-    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }]
   },
   {
     type: 'function',
@@ -100,14 +111,14 @@ export const SKYUSD_ABI = [
   },
   {
     type: 'function',
-    name: 'withdrawFees',
+    name: 'withdrawFunds',
     stateMutability: 'nonpayable',
-    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
+    inputs: [{ name: 'recipient', type: 'address', internalType: 'address payable' }],
     outputs: []
   },
   {
     type: 'function',
-    name: 'faucetFeeBalance',
+    name: 'depositBalance',
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }]
@@ -118,18 +129,5 @@ export const SKYUSD_ABI = [
     stateMutability: 'view',
     inputs: [],
     outputs: [{ name: '', type: 'address', internalType: 'address' }]
-  },
-  {
-    type: 'function',
-    name: 'claimsRemaining',
-    stateMutability: 'view',
-    inputs: [{ name: 'recipient', type: 'address', internalType: 'address' }],
-    outputs: [{ name: '', type: 'uint256', internalType: 'uint256' }]
   }
 ] as const satisfies Abi;
-
-// Backward-compatible aliases used by existing components.
-export const USDL_ADDRESS = TOKEN_ADDRESS;
-export const MOCK_USDL_ABI = SKYUSD_ABI;
-export const USDL_DECIMALS = SKYUSD_DECIMALS;
-export const USDL_MULTIPLIER = SKYUSD_MULTIPLIER;

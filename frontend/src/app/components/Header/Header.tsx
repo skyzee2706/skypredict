@@ -11,7 +11,6 @@ import TopUpIcon from '../Shared/TopUpIcon';
 import InfoIcon from '../Shared/InfoIcon';
 import Tooltip from '../Shared/Tooltip';
 import { TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER, TOKEN_SYMBOL } from '../../../lib/constants';
-import { dripUsdl } from '../../../lib/onchain/writes';
 
 interface HeaderProps {
     onNavigate: (page: 'landing' | 'markets' | 'portfolio' | 'leaderboard' | 'faucet') => void;
@@ -22,7 +21,6 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     const { isConnected, walletAddress, isConnecting, connect, disconnect } = useWallet();
     const { showToast } = useToast();
     const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
-    const [isDripping, setIsDripping] = React.useState(false);
     const [walletDropdownOpen, setWalletDropdownOpen] = React.useState(false);
     const [balanceDropdownOpen, setBalanceDropdownOpen] = React.useState(false);
     const [theme, setTheme] = React.useState<'light' | 'dark'>('dark');
@@ -92,42 +90,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         setWalletDropdownOpen(false);
     }, [disconnect]);
 
-    const handleTopUp = React.useCallback(async () => {
-        setIsDripping(true);
-        try {
-            await dripUsdl();
-            showToast(`Successfully received 1000 ${TOKEN_SYMBOL}!`, 'success');
-            await fetchTokenBalance();
-            window.dispatchEvent(new Event('skyusd:balance-refresh'));
-            setBalanceDropdownOpen(false);
-        } catch (error: unknown) {
-            console.error('Failed to drip token - detailed error:', error);
-
-            const errorObj = error as { message?: string; code?: string | number };
-            const errorMessage = errorObj?.message?.toLowerCase() || '';
-            const errorCode = errorObj?.code;
-
-            if (
-                errorCode === 4001 ||
-                errorCode === 'ACTION_REJECTED' ||
-                errorMessage.includes('user rejected') ||
-                errorMessage.includes('cancelled') ||
-                errorMessage.includes('canceled') ||
-                errorMessage.includes('declined') ||
-                errorMessage.includes('denied')
-            ) {
-                showToast('Drip cancelled. You can try again when ready.', 'info');
-            } else if (errorMessage.includes('insufficient funds') || errorMessage.includes('insufficient eth')) {
-                showToast('Insufficient ETH for gas. Please get some testnet ETH first.', 'error');
-            } else if (errorMessage.includes('wait 24h') || errorMessage.includes('cooldown') || errorMessage.includes('24h limit')) {
-                showToast('You have reached your daily drip limit. Try again in 24 hours.', 'warning');
-            } else {
-                showToast(`Failed to get ${TOKEN_SYMBOL}. Please check console for details.`, 'error');
-            }
-        } finally {
-            setIsDripping(false);
-        }
-    }, [fetchTokenBalance, showToast]);
+    const handleDeposit = React.useCallback(() => {
+        onNavigate('faucet');
+        setBalanceDropdownOpen(false);
+    }, [onNavigate]);
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -193,9 +159,9 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                         </div>
                         {balanceDropdownOpen && (
                             <div className={`${styles.dropdownMenu} ${styles.balanceDropdown}`}>
-                                <button className={styles.dropdownItem} onClick={handleTopUp} disabled={isDripping}>
+                                <button className={styles.dropdownItem} onClick={handleDeposit}>
                                     <TopUpIcon size={16} />
-                                    <span className={styles.dropdownItemLabel}>{isDripping ? `Getting ${TOKEN_SYMBOL}...` : `Get ${TOKEN_SYMBOL}`}</span>
+                                    <span className={styles.dropdownItemLabel}>Deposit RITUAL</span>
                                 </button>
                                 <a
                                     href="https://explorer.ritualfoundation.org"

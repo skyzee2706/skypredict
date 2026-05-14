@@ -14,6 +14,7 @@ contract MarketFactory is Ownable {
     address public ethUsdOracle;
     address public token;
     address public predictionMarketImplementation;
+    address public routerAddress;
 
     address[] public markets;
 
@@ -113,6 +114,12 @@ contract MarketFactory is Ownable {
         );
 
         markets.push(clone);
+
+        // Auto-configure router on new market if set
+        if (routerAddress != address(0)) {
+            PredictionMarket(clone).setRouter(routerAddress);
+        }
+
         emit MarketCreated(clone, question, sideAName, drawName, sideBName, marketType, strikePrice, endTime);
         return clone;
     }
@@ -133,5 +140,19 @@ contract MarketFactory is Ownable {
 
     function marketCount() external view returns (uint256) {
         return markets.length;
+    }
+
+    function setRouterAddress(address _router) external onlyOwner {
+        routerAddress = _router;
+    }
+
+    /**
+     * @notice Set router on all existing markets (for markets created before router was set).
+     */
+    function setRouterOnAllMarkets(address _router) external onlyOwner {
+        routerAddress = _router;
+        for (uint256 i = 0; i < markets.length; i++) {
+            PredictionMarket(markets[i]).setRouter(_router);
+        }
     }
 }
