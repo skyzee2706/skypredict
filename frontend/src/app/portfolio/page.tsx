@@ -189,11 +189,12 @@ export default function PortfolioPage() {
         // button API stable without reintroducing direct per-market RPC loops.
     }, []);
 
-    const hasLoadedFactory = factoryFetched && !factoryLoading && !factoryFetching;
+    const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || (factoryFetched && !factoryLoading && !factoryFetching);
     const hasCheckedPositions = isConnected && liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching;
     const needsMarketDetails = batchedPositions.length > 0;
     const hasLoadedPositionMarkets = !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
-    const isLoading = isConnected && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
+    const hasNoIndexedMarkets = isConnected && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
+    const isLoading = isConnected && !hasNoIndexedMarkets && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
     const handleClaim = async (position: PortfolioPosition) => {
         setClaiming(position.market.contractId);
