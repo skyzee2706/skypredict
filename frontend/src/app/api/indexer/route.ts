@@ -4,6 +4,7 @@ import { seismicTestnet } from '../../../lib/onchain/seismicChain';
 import { readIndexerCache } from '../../../lib/indexer/cache';
 import { refreshIndexerCache } from '../../../lib/indexer/build';
 import { readSupabaseLeaderboard } from '../../../lib/indexer/supabaseStore';
+import { NO_STORE_HEADERS } from '../../../lib/api/noStore';
 
 export const revalidate = 60;
 export const dynamic = 'force-dynamic';
@@ -37,7 +38,7 @@ export async function GET(request: NextRequest) {
         try {
             const supabaseData = await readSupabaseLeaderboard(address, LEADERBOARD_LIMIT);
             if (supabaseData && (supabaseData.leaderboard.length > 0 || supabaseData.currentUser)) {
-                return NextResponse.json(supabaseData);
+                return NextResponse.json(supabaseData, { headers: NO_STORE_HEADERS });
             }
         } catch (error) {
             console.error('Supabase leaderboard read failed, falling back to local cache:', error);
@@ -63,12 +64,12 @@ export async function GET(request: NextRequest) {
     };
 
     if (cache.updatedAt > 0 && age < INDEXER_TTL_MS) {
-        return NextResponse.json({ ...responseCache, cached: true });
+        return NextResponse.json({ ...responseCache, cached: true }, { headers: NO_STORE_HEADERS });
     }
 
     if (hasUsableCache) {
         void refreshOnce().catch((error) => console.error('Background indexer refresh failed:', error));
-        return NextResponse.json({ ...responseCache, cached: true, refreshing: true });
+        return NextResponse.json({ ...responseCache, cached: true, refreshing: true }, { headers: NO_STORE_HEADERS });
     }
 
     try {
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
             currentUser: freshCurrentUser,
             cached: false,
             source: 'file',
-        });
+        }, { headers: NO_STORE_HEADERS });
     } catch (error: unknown) {
         console.error('Indexer Error:', error);
         return NextResponse.json({
@@ -95,6 +96,6 @@ export async function GET(request: NextRequest) {
             cached: true,
             stale: true,
             error: 'Failed to refresh indexer data',
-        });
+        }, { headers: NO_STORE_HEADERS });
     }
 }

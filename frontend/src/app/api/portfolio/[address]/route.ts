@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { readIndexerCache } from '../../../../lib/indexer/cache';
 import { readSupabasePortfolio } from '../../../../lib/indexer/supabaseStore';
+import { NO_STORE_HEADERS } from '../../../../lib/api/noStore';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,7 +16,7 @@ export async function GET(_request: Request, context: Params) {
     try {
         const supabasePortfolio = await readSupabasePortfolio(normalized);
         if (supabasePortfolio) {
-            return NextResponse.json(supabasePortfolio);
+            return NextResponse.json(supabasePortfolio, { headers: NO_STORE_HEADERS });
         }
     } catch (error) {
         console.error('Supabase portfolio read failed, falling back to local cache:', error);
@@ -32,5 +33,5 @@ export async function GET(_request: Request, context: Params) {
         activity,
         cached: true,
         source: 'file',
-    });
+    }, { headers: NO_STORE_HEADERS });
 }
