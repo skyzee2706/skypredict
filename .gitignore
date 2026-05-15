@@ -46,8 +46,10 @@ frontend/.env.development
 frontend/.env.production
 contracts/.env
 contracts/.env.local
+contracts/.env.*.local
 !*.env.example
 !frontend/.env.example
+!contracts/.env.example
 
 # ===============================
 # LOGS / RUNTIME STATE
@@ -57,19 +59,24 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+pm2*.log
 pm2-*.log
-debug_bot.log
 logs/
 *.pid
+*.pid.lock
 scripts/auto-market.lock
 scripts/sports-markets.json
+frontend/.cache/
+frontend/.cache/**
 
 # ===============================
 # TYPESCRIPT / NEXT.JS / VERCEL
 # ===============================
 *.tsbuildinfo
+**/*.tsbuildinfo
 frontend/tsconfig.tsbuildinfo
 next-env.d.ts
+frontend/next-env.d.ts
 .vercel
 .next/cache
 
@@ -108,24 +115,34 @@ desktop.ini
 final_factory.txt
 price_history.csv
 tmp/
+temp/
+*.tmp
 *.har
 old_frontend_files.txt
 old_code/
 pm-kit/
+scratch/
+.analysis-*/
+implementation_plan.md
 contracts/deploy_error.txt
 contracts/deploy_factory_error.txt
 contracts/deploy_log.txt
 contracts/deploy_log_utf8.txt
 contracts/parsed_addresses.txt
 contracts/parsed_factory_addresses.txt
+contracts/*_deployment.local.json
 contracts/ritual_deployment.local.json
 contracts/legacy_deployment.local.json
+*_deployment.local.json
 
 # Sandbox / throwaway files
 anjing.js
 bot.js
 runner.js
 test-faucet.js
+deploy-factory.js
+auto-market.bat
+frontend/scan_factory.cjs
 
 # Large local images not required for source
 IMG_3156.PNG

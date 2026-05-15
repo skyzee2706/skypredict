@@ -1,0 +1,437 @@
+/* eslint-disable no-console */
+const fs = require('fs');
+const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
+const { createPublicClient, http, parseAbiItem } = require('viem');
+
+loadEnv(path.join(__dirname, '..', '.env.local'));
+loadEnv(path.join(__dirname, '..', '..', '.env'));
+
+const FactoryArtifact = require('../src/lib/contracts/MarketFactory.json');
+const MarketArtifact = require('../src/lib/contracts/PredictionMarket.json');
+
+const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_FACTORY_ADDRESS || '0xc62d05bd0E86bc18cA9ea97996e1489293eB6F14';
+const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_SKYUSD_ADDRESS;
+const ROUTER_ADDRESS = process.env.NEXT_PUBLIC_ROUTER_ADDRESS;
+const RPC_URL = process.env.NEXT_PUBLIC_RITUAL_RPC_URL || 'https://rpc.ritualfoundation.org';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const START_BLOCK = BigInt(process.env.INDEXER_START_BLOCK || '1');
+const CHUNK_SIZE = BigInt(process.env.INDEXER_CHUNK_SIZE || '100000');
+const BLOCKS_PER_TICK = BigInt(process.env.INDEXER_BLOCKS_PER_TICK || '1000000');
+const LOOP_INTERVAL_MS = Number(process.env.INDEXER_LOOP_INTERVAL_MS || '60000');
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+const STATE_ID = 'main';
+const args = new Set(process.argv.slice(2));
+const once = args.has('--once');
+const reset = args.has('--reset');
+const fromArg = process.argv.find((arg) => arg.startsWith('--from='));
+const explicitFromBlock = fromArg ? BigInt(fromArg.split('=')[1]) : null;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+}
+if (!TOKEN_ADDRESS) {
+  throw new Error('Missing NEXT_PUBLIC_TOKEN_ADDRESS / NEXT_PUBLIC_SKYUSD_ADDRESS');
+}
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false },
+});
+const client = createPublicClient({ transport: http(RPC_URL) });
+const TransferEvent = parseAbiItem('event Transfer(address indexed from, address indexed to, uint256 value)');
+const BetRoutedEvent = parseAbiItem('event BetRouted(address indexed user, address indexed market, uint8 outcome, uint256 amount)');
+
+function loadEnv(file) {
+  if (!fs.existsSync(file)) return;
+  const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq <= 0) continue;
+    const key = trimmed.slice(0, eq).trim();
+    const value = trimmed.slice(eq + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (!process.env[key]) process.env[key] = value;
+  }
+}
+
+function normalize(address) {
+  return String(address).toLowerCase();
+}
+
+function getUser(map, address) {
+  const key = normalize(address);
+  if (!map.has(key)) {
+    map.set(key, {
+      address: key,
+      volume: 0n,
+      payout: 0n,
+      positionValue: 0n,
+      sideA: 0,
+      draw: 0,
+      sideB: 0,
+      trades: 0,
+      markets: new Set(),
+      activities: [],
+    });
+  }
+  return map.get(key);
+}
+
+async function getState() {
+  const { data, error } = await supabase
+    .from('indexer_state')
+    .select('last_processed_block')
+    .eq('id', STATE_ID)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.last_processed_block ? BigInt(String(data.last_processed_block)) : 0n;
+}
+
+async function resetTables() {
+  console.log('[indexer] resetting leaderboard/indexer tables');
+  await supabase.from('user_activities').delete().neq('tx_hash', '');
+  await supabase.from('user_portfolios').delete().neq('user_address', '');
+  await supabase.from('leaderboard').delete().neq('user_address', '');
+  await supabase.from('indexer_state').upsert({ id: STATE_ID, last_processed_block: '0', updated_at: new Date().toISOString() });
+}
+
+async function readExistingUsers() {
+  const users = new Map();
+  const indexedActivityKeys = new Set();
+  const txMarketKeys = new Set();
+
+  const { data: leaderboardRows, error: lbError } = await supabase
+    .from('leaderboard')
+    .select('user_address, volume, payout, side_a_bets, draw_bets, side_b_bets, total_bets');
+  if (lbError) throw lbError;
+  for (const row of leaderboardRows || []) {
+    const user = getUser(users, row.user_address);
+    user.volume = BigInt(String(row.volume || '0'));
+    user.positionValue = BigInt(String(row.payout || '0'));
+    user.sideA = Number(row.side_a_bets || 0);
+    user.draw = Number(row.draw_bets || 0);
+    user.sideB = Number(row.side_b_bets || 0);
+    user.trades = Number(row.total_bets || 0);
+  }
+
+  const { data: portfolioRows, error: pfError } = await supabase.from('user_portfolios').select('user_address, market_address');
+  if (pfError) throw pfError;
+  for (const row of portfolioRows || []) getUser(users, row.user_address).markets.add(normalize(row.market_address));
+
+  const { data: activityRows, error: activityError } = await supabase
+    .from('user_activities')
+    .select('tx_hash, log_index, market_address');
+  if (activityError) throw activityError;
+  for (const row of activityRows || []) {
+    indexedActivityKeys.add(`${row.tx_hash}:${row.log_index}`);
+    txMarketKeys.add(`${row.tx_hash}:${normalize(row.market_address)}`);
+  }
+
+  return { users, indexedActivityKeys, txMarketKeys };
+}
+
+async function getMarkets() {
+  const markets = await client.readContract({
+    address: FACTORY_ADDRESS,
+    abi: FactoryArtifact.abi,
+    functionName: 'getAllMarkets',
+  });
+  return [...markets].map((market) => market.toLowerCase());
+}
+
+function pushActivity(user, activity, indexedActivityKeys, txMarketKeys) {
+  const activityKey = `${activity.tx_hash}:${activity.log_index}`;
+  if (indexedActivityKeys.has(activityKey)) return false;
+  const exists = user.activities.some(
+    (item) => item.tx_hash === activity.tx_hash && Number(item.log_index) === Number(activity.log_index)
+  );
+  if (exists) return false;
+  user.activities.push(activity);
+  indexedActivityKeys.add(activityKey);
+  txMarketKeys.add(`${activity.tx_hash}:${activity.market_address}`);
+  return true;
+}
+
+function outcomeName(outcome) {
+  const id = Number(outcome);
+  if (id === 1) return 'DRAW';
+  if (id === 2) return 'SIDE_B';
+  return 'SIDE_A';
+}
+
+function outcomeId(outcome) {
+  const id = Number(outcome);
+  return id === 1 || id === 2 ? id : 0;
+}
+
+async function scanRouterBets(markets, fromBlock, toBlock, users, indexedActivityKeys, txMarketKeys) {
+  if (!ROUTER_ADDRESS || normalize(ROUTER_ADDRESS) === ZERO_ADDRESS) {
+    console.warn('[indexer] NEXT_PUBLIC_ROUTER_ADDRESS is empty, skipping BetRouted scan');
+    return;
+  }
+
+  const marketSet = new Set(markets.map(normalize));
+  for (let cursor = fromBlock; cursor <= toBlock; cursor += CHUNK_SIZE) {
+    const chunkTo = cursor + CHUNK_SIZE - 1n > toBlock ? toBlock : cursor + CHUNK_SIZE - 1n;
+    const logs = await client.getLogs({
+      address: ROUTER_ADDRESS,
+      event: BetRoutedEvent,
+      args: { market: markets },
+      fromBlock: cursor,
+      toBlock: chunkTo,
+    }).catch((error) => {
+      console.warn(`[indexer] router scan failed ${cursor}-${chunkTo}:`, error.shortMessage || error.message);
+      return [];
+    });
+
+    for (const log of logs) {
+      const userAddress = log.args.user;
+      const marketAddress = log.args.market;
+      const amount = log.args.amount;
+      if (!userAddress || !marketAddress || amount === undefined || amount <= 0n) continue;
+      const market = normalize(marketAddress);
+      if (!marketSet.has(market)) continue;
+
+      const user = getUser(users, userAddress);
+      const outcome = outcomeName(log.args.outcome);
+      user.markets.add(market);
+      const inserted = pushActivity(user, {
+        tx_hash: log.transactionHash,
+        log_index: log.logIndex,
+        user_address: user.address,
+        market_address: market,
+        type: 'BET',
+        outcome: outcomeId(log.args.outcome),
+        amount: amount.toString(),
+        block_number: log.blockNumber.toString(),
+        timestamp: Date.now(),
+      }, indexedActivityKeys, txMarketKeys);
+      if (inserted) {
+        user.volume += amount;
+        user.trades += 1;
+        if (outcome === 'DRAW') user.draw += 1;
+        else if (outcome === 'SIDE_B') user.sideB += 1;
+        else user.sideA += 1;
+      }
+    }
+    console.log(`[indexer] scanned router bets ${cursor}-${chunkTo}, logs=${logs.length}`);
+  }
+}
+
+async function scanTransfers(markets, fromBlock, toBlock, users, indexedActivityKeys, txMarketKeys) {
+  const marketSet = new Set(markets.map(normalize));
+  for (let cursor = fromBlock; cursor <= toBlock; cursor += CHUNK_SIZE) {
+    const chunkTo = cursor + CHUNK_SIZE - 1n > toBlock ? toBlock : cursor + CHUNK_SIZE - 1n;
+    const logs = await client.getLogs({
+      address: TOKEN_ADDRESS,
+      event: TransferEvent,
+      args: { to: markets },
+      fromBlock: cursor,
+      toBlock: chunkTo,
+    }).catch((error) => {
+      console.warn(`[indexer] transfer scan failed ${cursor}-${chunkTo}:`, error.shortMessage || error.message);
+      return [];
+    });
+
+    for (const log of logs) {
+      const from = log.args.from;
+      const to = log.args.to;
+      const value = log.args.value;
+      if (!from || !to || value === undefined || value <= 0n) continue;
+      const market = normalize(to);
+      if (!marketSet.has(market)) continue;
+
+      const user = getUser(users, from);
+      const alreadyIndexedFromRouter = txMarketKeys.has(`${log.transactionHash}:${market}`);
+      if (!alreadyIndexedFromRouter) {
+        user.markets.add(market);
+        const inserted = pushActivity(user, {
+          tx_hash: log.transactionHash,
+          log_index: log.logIndex,
+          user_address: user.address,
+          market_address: market,
+          type: 'BET',
+          outcome: null,
+          amount: value.toString(),
+          block_number: log.blockNumber.toString(),
+          timestamp: Date.now(),
+        }, indexedActivityKeys, txMarketKeys);
+        if (inserted) {
+          user.volume += value;
+          user.trades += 1;
+          user.sideA += 1; // exact outcome is reconciled from getUserPosition below
+        }
+      } else {
+        user.markets.add(market);
+      }
+    }
+    console.log(`[indexer] scanned transfers ${cursor}-${chunkTo}, logs=${logs.length}`);
+  }
+}
+
+async function reconcilePositions(users) {
+  for (const user of users.values()) {
+    user.positionValue = 0n;
+    user.sideA = 0;
+    user.draw = 0;
+    user.sideB = 0;
+
+    for (const market of user.markets) {
+      const [position, marketState, pools] = await Promise.all([
+        client.readContract({
+          address: market,
+          abi: MarketArtifact.abi,
+          functionName: 'getUserPosition',
+          args: [user.address],
+        }).catch(() => [0n, 0n, 0n, false]),
+        Promise.all([
+          client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'resolved' }).catch(() => false),
+          client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'winningOutcome' }).catch(() => 0),
+        ]),
+        Promise.all([
+          client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'yesPool' }).catch(() => 0n),
+          client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'drawPool' }).catch(() => 0n),
+          client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'noPool' }).catch(() => 0n),
+        ]),
+      ]);
+
+      const raw = Array.isArray(position) ? position : [0n, 0n, 0n, false];
+      const sideA = BigInt(raw[0] || 0n);
+      const draw = BigInt(raw.length >= 4 ? raw[1] || 0n : 0n);
+      const sideB = BigInt(raw.length >= 4 ? raw[2] || 0n : raw[1] || 0n);
+      const total = sideA + draw + sideB;
+      if (total <= 0n) continue;
+
+      user.sideA += sideA > 0n ? 1 : 0;
+      user.draw += draw > 0n ? 1 : 0;
+      user.sideB += sideB > 0n ? 1 : 0;
+
+      const resolved = Boolean(marketState[0]);
+      const winner = Number(marketState[1] || 0);
+      const winningPosition = winner === 1 ? draw : winner === 2 ? sideB : sideA;
+
+      if (!resolved) {
+        // Unrealized position: keep open markets neutral, same as current stake value.
+        user.positionValue += total;
+      } else if (winningPosition > 0n) {
+        // Match PredictionMarket.claim():
+        // totalPayout = userWinningBet * totalPool / winningPool
+        // userPayout = totalPayout - 10% fee
+        const sideAPool = BigInt(pools[0] || 0n);
+        const drawPool = BigInt(pools[1] || 0n);
+        const sideBPool = BigInt(pools[2] || 0n);
+        const totalPool = sideAPool + drawPool + sideBPool;
+        const winningPool = winner === 1 ? drawPool : winner === 2 ? sideBPool : sideAPool;
+        if (totalPool > 0n && winningPool > 0n) {
+          const grossPayout = (winningPosition * totalPool) / winningPool;
+          const fee = (grossPayout * 10n) / 100n;
+          user.positionValue += grossPayout - fee;
+        }
+      }
+    }
+
+    // PNL is claimable/current value minus trading volume.
+    // Open markets are neutral; resolved markets use the same proportional payout formula as claim().
+    // Do not force volume up to payout value, otherwise profitable wins become 0 PNL.
+    user.trades = Math.max(user.trades, user.sideA + user.draw + user.sideB);
+  }
+}
+
+function buildLeaderboard(users) {
+  const rows = [...users.values()]
+    .filter((user) => user.volume > 0n || user.positionValue > 0n || user.trades > 0)
+    .map((user) => ({
+      user_address: user.address,
+      volume: user.volume.toString(),
+      payout: user.positionValue.toString(),
+      pnl: (user.positionValue - user.volume).toString(),
+      side_a_bets: user.sideA,
+      draw_bets: user.draw,
+      side_b_bets: user.sideB,
+      total_bets: user.trades,
+      volume_rank: 0,
+      pnl_rank: 0,
+      updated_at: new Date().toISOString(),
+    }));
+
+  [...rows]
+    .sort((a, b) => (BigInt(b.volume) > BigInt(a.volume) ? 1 : BigInt(b.volume) < BigInt(a.volume) ? -1 : 0))
+    .forEach((row, index) => { row.volume_rank = index + 1; });
+  [...rows]
+    .sort((a, b) => (BigInt(b.pnl) > BigInt(a.pnl) ? 1 : BigInt(b.pnl) < BigInt(a.pnl) ? -1 : 0))
+    .forEach((row, index) => { row.pnl_rank = index + 1; });
+  return rows;
+}
+
+async function save(users, leaderboardRows, lastProcessedBlock) {
+  const now = new Date().toISOString();
+  const portfolioRows = [];
+  const activityRows = [];
+
+  for (const user of users.values()) {
+    for (const market of user.markets) {
+      portfolioRows.push({ user_address: user.address, market_address: market, updated_at: now });
+    }
+    activityRows.push(...user.activities);
+  }
+
+  if (portfolioRows.length) {
+    const { error } = await supabase.from('user_portfolios').upsert(portfolioRows, { onConflict: 'user_address,market_address' });
+    if (error) throw error;
+  }
+  if (activityRows.length) {
+    const { error } = await supabase.from('user_activities').upsert(activityRows, { onConflict: 'tx_hash,log_index' });
+    if (error) throw error;
+  }
+  if (leaderboardRows.length) {
+    const { error } = await supabase.from('leaderboard').upsert(leaderboardRows, { onConflict: 'user_address' });
+    if (error) throw error;
+  }
+  const { error } = await supabase.from('indexer_state').upsert({
+    id: STATE_ID,
+    last_processed_block: lastProcessedBlock.toString(),
+    updated_at: now,
+  }, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+async function tick() {
+  if (reset) await resetTables();
+  const latest = await client.getBlockNumber();
+  const markets = await getMarkets();
+  let last = explicitFromBlock !== null ? explicitFromBlock - 1n : await getState();
+  if (last <= 0n) last = START_BLOCK - 1n;
+  const fromBlock = last + 1n;
+  const targetBlock = fromBlock + BLOCKS_PER_TICK - 1n > latest ? latest : fromBlock + BLOCKS_PER_TICK - 1n;
+
+  if (fromBlock > latest) {
+    console.log(`[indexer] up to date at ${last}`);
+    return;
+  }
+
+  console.log(`[indexer] markets=${markets.length}, scanning ${fromBlock}-${targetBlock} / latest ${latest}`);
+  const { users, indexedActivityKeys, txMarketKeys } = await readExistingUsers();
+  await scanRouterBets(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
+  await scanTransfers(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
+  await reconcilePositions(users);
+  const leaderboardRows = buildLeaderboard(users);
+  await save(users, leaderboardRows, targetBlock);
+  console.log(`[indexer] saved users=${leaderboardRows.length}, lastProcessedBlock=${targetBlock}`);
+}
+
+async function main() {
+  do {
+    try {
+      await tick();
+    } catch (error) {
+      console.error('[indexer] tick failed:', error);
+      if (once) process.exitCode = 1;
+    }
+    if (once) break;
+    await new Promise((resolve) => setTimeout(resolve, LOOP_INTERVAL_MS));
+  } while (true);
+}
+
+main();

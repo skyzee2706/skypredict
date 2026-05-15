@@ -1,188 +1,78 @@
 # Sky Predict — Ritual Prediction Markets
 
-Sky Predict is a decentralized prediction-market platform for daily crypto price markets and selected football fixtures on the Ritual network. The platform combines on-chain settlement, SkyUSD-denominated betting, automated market operations, and a premium web interface built for testnet usage.
-
-Users interact with markets through the Next.js frontend, claim SkyUSD through a controlled faucet, approve SkyUSD spending, place predictions, and claim payouts after resolution. Backend automation is handled by `scripts/auto-market.ts`, which creates markets and resolves them using external data sources.
+Sky Predict is a decentralized prediction-market platform for crypto and sports markets on the Ritual network. It combines Solidity prediction markets, a SkyUSD betting token, a Next.js frontend, automated market operations, and a Supabase-backed PM2 indexer for portfolio and leaderboard data.
 
 > **Status:** Experimental testnet software. Not audited. Do not use with real funds.
 
-## Core Features
-
-- **Daily crypto prediction markets** for BTC, ETH, SOL, XRP, DOGE, and BNB.
-- **Football sports markets** for selected major domestic fixtures and UCL-style fixtures.
-- **Binary crypto outcomes:** YES / NO.
-- **3-way sports outcomes:** Home / Draw / Away.
-- **SkyUSD ERC-20 betting token** with 6 decimals.
-- **Paid SkyUSD faucet** with a native Ritual claim fee and claim limits.
-- **Owner-only faucet treasury withdrawal** through a hidden `/admin` dashboard.
-- **Automated market creation and resolution** through `scripts/auto-market.ts`.
-- **Crypto resolution** using median pricing across multiple exchanges via CCXT.
-- **Sports resolution** using football-data.org final match scores.
-- **Receipt-aware wallet transactions** so UI success states only appear after on-chain confirmation.
-- **Realtime balance refreshes** after faucet claims, approvals, bets, and claims.
-- **Portfolio history pagination** and scrollable trade history.
-- **Leaderboard page** prepared for professional ranking/indexer display.
-- **Privy + wagmi + viem** wallet integration.
-
-## Current Architecture
+## Current Production Architecture
 
 ```text
 .
 ├── contracts/
 │   ├── contracts/
-│   │   ├── MarketFactory.sol       # Owner factory for deploying market clones
-│   │   ├── PredictionMarket.sol    # Market logic for crypto and sports outcomes
-│   │   ├── SkyUSDT.sol             # SkyUSD token, faucet, and faucet treasury
-│   │   ├── MockV3Aggregator.sol    # Test oracle helper
-│   │   └── IPriceOracle.sol        # Oracle interface
-│   ├── scripts/
-│   │   └── deploy.ts               # Fresh stack deployment script
-│   └── ritual_deployment.json      # Latest deployment output
+│   │   ├── MarketFactory.sol       # Deploys and tracks prediction markets
+│   │   ├── PredictionMarket.sol    # Betting, resolution, and claim logic
+│   │   ├── MarketRouter.sol        # Router-based trading entrypoint/events
+│   │   ├── SkyUSDT.sol             # SkyUSD ERC-20 and faucet
+│   │   └── MockV3Aggregator.sol    # Test oracle helper
+│   ├── scripts/deploy.ts           # Fresh stack deployment
+│   └── ritual_deployment.json      # Current deployment reference
 ├── frontend/
-│   ├── src/app/                    # Next.js App Router pages
-│   │   ├── admin/                  # Hidden admin treasury page
-│   │   ├── faucet/                 # SkyUSD faucet UI
-│   │   ├── leaderboard/            # Leaderboard placeholder/indexer UI
-│   │   ├── markets/                # Market listing/detail routes
-│   │   └── portfolio/              # User positions and history
-│   ├── src/app/components/         # Shared UI components
-│   ├── src/hooks/                  # Frontend hooks
-│   └── src/lib/onchain/            # Contract read/write helpers
-├── scripts/
-│   ├── auto-market.ts              # Production market scheduler
-│   ├── sports-markets.json         # Runtime sports cache, gitignored
-│   └── force-resolve.ts            # Manual resolution helper
-├── ecosystem.config.js             # PM2 scheduler config
-├── hardhat.config.ts               # Root Hardhat config
-├── package.json                    # Root contract/backend scripts
+│   ├── src/app/                    # Next.js App Router UI/API routes
+│   ├── src/hooks/                  # Market, portfolio, leaderboard hooks
+│   ├── src/lib/indexer/            # File/Supabase indexer adapters
+│   ├── src/lib/onchain/            # viem/wagmi reads and writes
+│   ├── scripts/indexer-worker.cjs  # PM2 Supabase indexer worker
+│   └── supabase_schema.sql         # Required DB tables/constraints
+├── scripts/auto-market.ts          # Market creation/resolution scheduler
+├── ecosystem.config.js             # PM2 market scheduler config
 └── README.md
 ```
 
-## Tech Stack
+## Core Features
 
-| Layer | Technology |
-|---|---|
-| Smart contracts | Solidity `^0.8.20`, Hardhat, OpenZeppelin |
-| Token | SkyUSD ERC-20, 6 decimals |
-| Market deployment | EIP-1167 clone pattern via OpenZeppelin `Clones` |
-| Frontend | Next.js 16, React 19, TypeScript |
-| Wallet | Privy, wagmi v2, viem |
-| Crypto pricing | CCXT median exchange pricing |
-| Sports data | football-data.org API |
-| Scheduler | TypeScript script managed by PM2 |
-| Network | Ritual testnet |
+- Daily crypto prediction markets for BTC, ETH, SOL, XRP, DOGE, and BNB.
+- Football markets with Home / Draw / Away outcomes.
+- SkyUSD ERC-20 betting token with 6 decimals.
+- Faucet and hidden owner admin treasury page.
+- Router-aware betting flow for accurate indexed trading events.
+- Database-first portfolio and leaderboard pages using Supabase.
+- Automatic 60-second fallback to chain scanning if database reads fail.
+- PM2-managed background indexer for leaderboard, portfolio, volume, and PNL.
+- PM2-managed market scheduler for creation and resolution.
 
-## Smart Contract Overview
+## PNL and Indexing Model
 
-### `SkyUSDT.sol`
-
-SkyUSD is the platform betting token.
-
-Current behavior:
-
-- Token name: `Sky USD`
-- Symbol: `SkyUSD`
-- Decimals: `6`
-- Initial owner mint: `1,000,000 SkyUSD`
-- Faucet amount: `1,000 SkyUSD` per successful claim
-- Faucet claim fee: `0.001` native Ritual token
-- Faucet limit: `2 claims / 24 hours / recipient`
-- Owner can mint additional SkyUSD with `ownerMint()`
-- Owner can withdraw accumulated faucet fees with `withdrawFees()`
-- Frontend admin page reads `faucetFeeBalance()`
-
-> The public faucet UI does not display the faucet fee text by design.
-
-### `MarketFactory.sol`
-
-The factory deploys and tracks prediction markets.
-
-Key behavior:
-
-- Owner-only market creation.
-- Deploys markets as lightweight EIP-1167 clones.
-- Tracks all created market addresses in `markets`.
-- Supports default crypto markets through `createMarket()`.
-- Supports named outcome markets through `createMarketWithOutcomes()`.
-- Allows owner to update oracle/token/implementation addresses.
-
-### `PredictionMarket.sol`
-
-Market contract used by both crypto and sports markets.
-
-Key behavior:
-
-- Bets are denominated in SkyUSD.
-- Users must approve SkyUSD before betting.
-- Betting is blocked after `bettingEndTime`.
-- Resolution is allowed after `endTime`.
-- Crypto markets resolve by settlement price against strike price.
-- Sports markets resolve by explicit outcome.
-- Winning users can claim proportional payout from total pool.
-- A `10%` protocol fee is taken from winner payouts at claim time.
-- Losers have no claimable payout.
-
-## Market Lifecycle
-
-### Crypto Markets
-
-1. `auto-market.ts` checks active markets from the current factory.
-2. If no active daily market exists for a ticker, it creates a new daily market.
-3. The strike price is based on live median exchange price.
-4. Betting closes **3 hours before settlement** for daily crypto markets.
-5. At/after settlement, the scheduler resolves expired markets using historical median pricing.
-6. Users with the winning side can claim payouts.
-
-### Sports Markets
-
-1. `auto-market.ts` discovers upcoming eligible fixtures from football-data.org.
-2. Eligible fixtures are created up to 5 days before kickoff.
-3. Betting closes at kickoff.
-4. The scheduler checks final match status after kickoff.
-5. Finished matches resolve as:
-   - `0` = Home / SideA
-   - `1` = Draw
-   - `2` = Away / SideB
-6. Resolved fixture state is removed from `scripts/sports-markets.json`.
-
-## Backend Automation
-
-The canonical backend scheduler is:
+Leaderboard and portfolio stats are based on indexed on-chain activity.
 
 ```text
-scripts/auto-market.ts
+PNL = current_or_claimable_value - total_trading_volume
 ```
 
-It is responsible for:
+For resolved winning positions, the indexer mirrors `PredictionMarket.claim()`:
 
-- Creating daily crypto markets.
-- Resolving expired crypto markets.
-- Discovering eligible football fixtures.
-- Creating sports markets.
-- Resolving sports markets after full-time scores are available.
-- Maintaining runtime sports cache in `scripts/sports-markets.json`.
-
-### PM2 Process
-
-`ecosystem.config.js` runs the scheduler as:
-
-```js
-script: "node"
-args: "-r ts-node/register/transpile-only scripts/auto-market.ts"
-env_file: ".env"
+```text
+grossPayout = userWinningBet * totalPool / winningPool
+fee = grossPayout * 10%
+claimablePayout = grossPayout - fee
+PNL = claimablePayout - volume
 ```
 
-Use `--update-env` whenever `.env` changes.
+Open markets are treated as neutral current value, so unrealized PNL does not incorrectly show a loss while the position is still active.
 
-```bash
-pm2 restart ecosystem.config.js --update-env
-```
+The indexer is designed to be idempotent:
 
-## Environment Variables
+- `user_activities` uses `(tx_hash, log_index)` as the primary key.
+- `user_portfolios` uses `(user_address, market_address)` as the primary key.
+- `leaderboard` uses `user_address` as the primary key.
+- The worker loads existing activities before scanning, so PM2 restarts or overlapping scans do not double-count volume/trades.
+- Router `BetRouted` logs are preferred; SkyUSD `Transfer` logs are fallback and deduped by transaction/market.
+
+## Required Environment Variables
 
 ### Root `.env`
 
-Used by Hardhat deployment and backend scheduler.
+Used by Hardhat and the market scheduler.
 
 ```env
 PRIVATE_KEY=your_deployer_private_key_without_0x
@@ -191,113 +81,71 @@ CHAIN_ID=1979
 RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
 RITUAL_EXPLORER_URL=https://explorer.ritualfoundation.org
-RITUAL_EXPLORER_API_URL=https://explorer.ritualfoundation.org/api
-SEISMIC_RPC_URL=https://rpc.ritualfoundation.org
-BASE_SEPOLIA_RPC_URL=https://rpc.ritualfoundation.org
-DEPLOYER_ADDRESS=0xYourDeployer
-OWNER_ADDRESS=0xYourOwner
 FACTORY_ADDRESS=0xYourFactory
 NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory
-USDL_ADDRESS=0xYourSkyUSD
 SKYUSD_ADDRESS=0xYourSkyUSD
-NEXT_PUBLIC_USDL_ADDRESS=0xYourSkyUSD
 NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
-BTC_ORACLE_ADDRESS=0xYourBtcOracle
-ORACLE_ADDRESS=0xYourBtcOracle
-ETH_ORACLE_ADDRESS=0xYourEthOracle
+NEXT_PUBLIC_ROUTER_ADDRESS=0xYourRouter
+OWNER_ADDRESS=0xYourOwner
+NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwner
 FOOTBALL_DATA_API_KEY=your_football_data_api_key
 ```
 
 ### `frontend/.env.local`
 
-Used by the Next.js frontend.
+Used by the Next.js frontend and indexer worker.
 
 ```env
 NEXT_PUBLIC_PRIVY_APP_ID=your_privy_app_id
 NEXT_PUBLIC_PRIVY_CLIENT_ID=your_privy_client_id
-NEXT_PUBLIC_BET_FACTORY_ADDRESS=0xYourFactory
-NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory
-NEXT_PUBLIC_TOKEN_ADDRESS=0xYourSkyUSD
-NEXT_PUBLIC_USDL_ADDRESS=0xYourSkyUSD
-NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
-NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwner
 NEXT_PUBLIC_RITUAL_RPC_URL=https://rpc.ritualfoundation.org
-NEXT_PUBLIC_SEISMIC_RPC_URL=https://rpc.ritualfoundation.org
-NEXT_PUBLIC_FIXED_RITUAL_FEE=0
-NEXT_PUBLIC_BRIDGE_SERVICE_URL=http://localhost:3001
-FOOTBALL_DATA_API_KEY=your_football_data_api_key
+NEXT_PUBLIC_FACTORY_ADDRESS=0xYourFactory
+NEXT_PUBLIC_SKYUSD_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_TOKEN_ADDRESS=0xYourSkyUSD
+NEXT_PUBLIC_ROUTER_ADDRESS=0xYourRouter
+NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwner
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_server_only_service_role_key
 ```
 
-> Never commit `.env`, `.env.local`, private keys, API keys, or runtime cache files.
+> Never expose `SUPABASE_SERVICE_ROLE_KEY` in client code. It must only be used by server routes or the worker.
 
 ## Installation
 
-### Root Dependencies
-
 ```bash
 npm install
-```
-
-### Frontend Dependencies
-
-```bash
 cd frontend
 npm install
 ```
 
-## Contract Workflow
+## Contracts
 
-### Compile
-
-From the project root:
+Compile from root:
 
 ```bash
 npm run compile
 ```
 
-Or from the contracts folder:
+Or from `contracts/`:
 
 ```bash
-npx hardhat compile
+cd contracts
+npm run compile
 ```
 
-### Deploy Fresh Stack to Ritual
-
-From `contracts/`:
+Deploy from `contracts/`:
 
 ```bash
 npx hardhat run scripts/deploy.ts --network ritual
 ```
 
-The deploy script prints the fresh addresses for:
+After deployment, update:
 
-- `SkyUSDT / SkyUSD`
-- `BTC/USD Oracle`
-- `ETH/USD Oracle`
-- `MarketFactory`
-
-After deploying, update all address references in:
-
-- `.env`
+- root `.env`
 - `contracts/.env`
 - `frontend/.env.local`
 
-### Important Reset Note
-
-A full reset requires:
-
-1. Deploying a fresh SkyUSD token.
-2. Deploying fresh oracle helpers.
-3. Deploying a fresh MarketFactory.
-4. Updating all env files.
-5. Restarting the frontend and PM2 scheduler.
-6. Running `auto-market.ts` or restarting PM2 so new markets are created from the new factory.
-
-Old markets remain on-chain but are no longer part of the current app stack once the factory address changes.
-
-## Frontend Workflow
-
-### Development
+## Frontend
 
 ```bash
 cd frontend
@@ -310,211 +158,118 @@ Open:
 http://localhost:3000
 ```
 
-### Production Build
+Production build:
 
 ```bash
 cd frontend
 npm run build
 ```
 
-### Routes
+## Supabase Setup
 
-| Route | Purpose |
-|---|---|
-| `/` | Landing page |
-| `/markets` | Active markets |
-| `/portfolio` | User positions and trade history |
-| `/faucet` | SkyUSD faucet |
-| `/leaderboard` | Leaderboard/indexer page |
-| `/admin` | Hidden owner-only treasury dashboard |
+Apply the schema in:
 
-## Running the Scheduler
+```text
+frontend/supabase_schema.sql
+```
 
-### Local One-Process Run
+Required tables:
+
+- `indexer_state`
+- `user_portfolios`
+- `user_activities`
+- `leaderboard`
+
+The primary keys in that schema are required for duplicate prevention.
+
+## Running the Indexer
+
+From `frontend/`:
+
+```bash
+npm run indexer:once
+```
+
+Full historical backfill, resetting indexed tables first:
+
+```bash
+npm run indexer:backfill
+```
+
+PM2 worker:
+
+```bash
+pm2 start npm --name skypredict-indexer -- run indexer:worker
+pm2 logs skypredict-indexer
+```
+
+Restart after env/code changes:
+
+```bash
+pm2 restart skypredict-indexer --update-env
+```
+
+## Running the Market Scheduler
+
+From project root:
 
 ```bash
 npm run auto-market
 ```
 
-or:
-
-```bash
-npx tsx scripts/auto-market.ts
-```
-
-### Production With PM2
+With PM2:
 
 ```bash
 pm2 start ecosystem.config.js
 pm2 logs sky-market-scheduler
-```
-
-Restart after code or env changes:
-
-```bash
 pm2 restart ecosystem.config.js --update-env
 ```
 
-Stop:
+## Important Routes
 
-```bash
-pm2 stop sky-market-scheduler
-```
-
-## Fee Model
-
-| Action | Fee |
-|---|---:|
-| Faucet claim | `0.001` native Ritual token |
-| Place bet | No protocol fee, gas only |
-| Claim winning payout | `10%` protocol fee from payout |
-| Losing bet | No claimable payout |
-| Admin faucet fee withdrawal | Gas only, owner-only |
-
-Faucet fees accumulate inside the SkyUSD contract and can be withdrawn by the owner through `/admin`.
-
-## Admin Dashboard
-
-The admin dashboard is intentionally hidden and is not linked from the landing page.
-
-```text
-/admin
-```
-
-Behavior:
-
-- Requires wallet connection.
-- Only the configured owner/deployer wallet can withdraw faucet fees.
-- Reads treasury balance from the SkyUSD contract.
-- Calls `withdrawFees()` through receipt-aware transaction handling.
-
-Owner address is configured via:
-
-```env
-NEXT_PUBLIC_OWNER_ADDRESS=0xYourOwner
-```
-
-## Transaction UX
-
-Frontend write helpers wait for on-chain receipts before showing success states.
-
-Covered flows:
-
-- SkyUSD faucet claim.
-- SkyUSD approval.
-- Market bet placement.
-- Reward claim.
-- Faucet fee withdrawal.
-
-After confirmed transactions, frontend components dispatch balance refresh events so the UI updates without a manual browser refresh.
-
-## Leaderboard
-
-The leaderboard route is prepared for professional ranking display. It is intended to support:
-
-- Trader ranking.
-- Win rate.
-- Volume.
-- Realized PNL.
-- Connected-wallet rank when outside the top list.
-
-RPC log scanning must be chunked because Ritual RPC can enforce `eth_getLogs` block-range limits.
+| Route | Purpose |
+|---|---|
+| `/` | Landing page |
+| `/markets` | Market list |
+| `/markets/[id]` | Market detail and trading |
+| `/portfolio` | Database-first user portfolio |
+| `/leaderboard` | Database-first leaderboard |
+| `/faucet` | SkyUSD faucet |
+| `/admin` | Hidden owner treasury dashboard |
 
 ## Verification Commands
-
-### Contracts
 
 ```bash
 npm run compile
 npm test
-```
-
-### Frontend
-
-```bash
 cd frontend
 npx tsc --noEmit
 npm run lint
-npm run build
+node --check scripts/indexer-worker.cjs
 ```
-
-> If the machine runs out of disk during compile/build, clear unused caches or free disk space first. `ENOSPC` means the process could not write files because storage is full.
 
 ## Deployment Checklist
 
-- [ ] Root `.env` has the current deployer and contract addresses.
-- [ ] `contracts/.env` matches the latest deployed stack.
-- [ ] `frontend/.env.local` points to the same factory and SkyUSD token.
-- [ ] Contracts compile successfully.
-- [ ] Frontend builds successfully.
-- [ ] PM2 scheduler starts successfully.
-- [ ] `auto-market.ts` creates daily crypto markets from the current factory.
-- [ ] Sports fixtures are created and tracked in `scripts/sports-markets.json`.
-- [ ] Faucet claim succeeds after confirmation.
-- [ ] SkyUSD balance updates without browser refresh.
-- [ ] Approval succeeds before bet placement.
-- [ ] Bet placement succeeds on an active market.
-- [ ] Claims work for winning positions after resolution.
-- [ ] `/admin` is accessible manually and withdraw is owner-only.
-
-## Troubleshooting
-
-### Approval or Bet Fails
-
-Check:
-
-- `NEXT_PUBLIC_TOKEN_ADDRESS` matches the current SkyUSD token.
-- `NEXT_PUBLIC_FACTORY_ADDRESS` and `NEXT_PUBLIC_BET_FACTORY_ADDRESS` match the current factory.
-- The selected market was created by the current factory.
-- User has enough SkyUSD.
-- User approved the current market contract, not an old market.
-- Betting deadline has not passed.
-
-### Faucet Claim Fails
-
-Check:
-
-- User has enough native Ritual token for gas and faucet claim value.
-- Claim recipient has not exceeded 2 claims in the current 24-hour window.
-- Frontend ABI marks `faucet()` as payable.
-- Frontend is using the fresh SkyUSD address.
-
-### PM2 Uses Old Addresses
-
-Restart with env reload:
-
-```bash
-pm2 restart ecosystem.config.js --update-env
-```
-
-Then inspect logs:
-
-```bash
-pm2 logs sky-market-scheduler
-```
-
-### Markets Not Updating
-
-Check:
-
-- PM2 process is running.
-- `FACTORY_ADDRESS` points to the latest factory.
-- Deployer wallet has enough Ritual gas.
-- `sports-markets.json` is not stale after a factory reset.
-- `auto-market.ts` is the active backend scheduler.
-
-### ENOSPC During Compile or Build
-
-`ENOSPC` means no disk space is available. Free storage, remove temporary build artifacts, or clear package-manager caches before retrying.
+- [ ] Root `.env` points to the current deployed contracts.
+- [ ] `contracts/.env` matches root deployment addresses.
+- [ ] `frontend/.env.local` matches current factory, router, and SkyUSD token.
+- [ ] Supabase schema has been applied.
+- [ ] `SUPABASE_SERVICE_ROLE_KEY` is present only server-side/worker-side.
+- [ ] Contracts compile.
+- [ ] Frontend typecheck/lint/build passes.
+- [ ] PM2 market scheduler is running.
+- [ ] PM2 indexer worker is running.
+- [ ] Leaderboard and portfolio show indexed wallet stats.
+- [ ] Faucet, approval, bet placement, and claim flows confirm by receipt.
 
 ## Security Notes
 
-- Do not commit private keys, API keys, `.env`, `.env.local`, logs, or runtime caches.
-- Use a dedicated deployer wallet.
-- Keep owner wallet access restricted.
-- The `/admin` route is hidden but still protected by wallet ownership checks.
-- This project is experimental testnet software and has not been professionally audited.
-- External data sources can fail, delay, or return incomplete values; the scheduler includes retry behavior but cannot guarantee source availability.
+- Do not commit `.env`, `.env.local`, private keys, API keys, logs, or runtime caches.
+- Rotate keys if they were ever committed historically.
+- Use a dedicated deployer wallet and keep owner wallet access restricted.
+- Hidden routes are not security boundaries; contract owner checks must enforce permissions.
+- External price and sports APIs can fail or delay; monitor scheduler logs.
+- This repository is experimental testnet software and has not received a formal third-party audit.
 
 ## License
 

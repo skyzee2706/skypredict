@@ -7,7 +7,6 @@ import Header from "../components/Header/Header";
 import styles from "../page.module.css";
 import { claimRewards } from "@/lib/onchain/writes";
 import { MarketData } from "@/data/markets";
-import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useBatchedMarkets, useBatchedUserPositions, useFactoryMarkets } from "@/hooks/useMarketBatches";
 import { useToast } from "../providers/ToastProvider";
 
@@ -23,7 +22,10 @@ type CachedPortfolioResponse = {
         blockNumber: string;
     }>;
     updatedAt: number;
+    source?: string;
 };
+
+const DATABASE_FALLBACK_TIMEOUT_MS = 60_000;
 
 type PortfolioPosition = {
     market: MarketData;
@@ -54,18 +56,21 @@ export default function PortfolioPage() {
     const [historyPage, setHistoryPage] = useState(1);
     const shouldPollPortfolio = positions.length === 0;
     const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
-    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval });
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
+    const [allowChainFallback, setAllowChainFallback] = useState(false);
+    const hasDatabasePortfolio = Boolean(cachedPortfolio?.marketAddresses?.length);
+    const shouldUseChainFallback = allowChainFallback && !hasDatabasePortfolio;
+    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval, enabled: shouldUseChainFallback });
     const liveAddresses = useMemo(() => {
         const cached = cachedPortfolio?.marketAddresses ?? [];
         return cached.length > 0 ? cached : addresses;
     }, [addresses, cachedPortfolio]);
-    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined, { refetchInterval: portfolioRefetchInterval });
+    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
     const positionMarketAddresses = useMemo(
         () => batchedPositions.map((position) => position.marketAddress),
         [batchedPositions]
     );
-    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval });
+    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
 
     const userStats = useMemo(() => {
         const volume = positions.reduce((sum, position) => sum + position.total, 0);
@@ -92,20 +97,40 @@ export default function PortfolioPage() {
         }
 
         setCachedPortfolio(null);
+        setAllowChainFallback(false);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => {
+            setAllowChainFallback(true);
+            controller.abort();
+        }, DATABASE_FALLBACK_TIMEOUT_MS);
 
-        fetch(`/api/portfolio/${address}`, { cache: "no-store" })
+        fetch(`/api/portfolio/${address}`, { cache: "no-store", signal: controller.signal })
             .then((response) => (response.ok ? response.json() : null))
             .then((data: CachedPortfolioResponse | null) => {
-                if (!cancelled && data?.marketAddresses?.length) {
+                if (cancelled) return;
+                window.clearTimeout(timeout);
+                if (data?.marketAddresses?.length) {
                     setCachedPortfolio(data);
+                    setAllowChainFallback(false);
+                } else {
+                    setAllowChainFallback(true);
                 }
             })
             .catch((error) => {
-                console.warn("Portfolio cache unavailable, falling back to chain scan:", error);
+                if (cancelled) return;
+                if (error instanceof DOMException && error.name === 'AbortError') {
+                    console.warn("Portfolio database timed out after 60s, falling back to chain scan.");
+                } else {
+                    console.warn("Portfolio cache unavailable, falling back to chain scan:", error);
+                    window.clearTimeout(timeout);
+                }
+                setAllowChainFallback(true);
             });
 
         return () => {
             cancelled = true;
+            window.clearTimeout(timeout);
+            controller.abort();
         };
     }, [address]);
 

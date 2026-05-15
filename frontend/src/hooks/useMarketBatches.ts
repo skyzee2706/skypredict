@@ -12,6 +12,7 @@ const ZERO_FACTORY = '0x0000000000000000000000000000000000000000';
 
 type BatchHookOptions = {
   refetchInterval?: number | false;
+  enabled?: boolean;
 };
 
 const MARKET_FIELDS = [
@@ -173,7 +174,7 @@ function buildMarketData(address: `0x${string}`, values: unknown[]): MarketData 
 }
 
 export function useFactoryMarkets(options: BatchHookOptions = {}) {
-  const enabled = Boolean(FACTORY_ADDRESS && FACTORY_ADDRESS !== ZERO_FACTORY);
+  const enabled = Boolean(FACTORY_ADDRESS && FACTORY_ADDRESS !== ZERO_FACTORY) && options.enabled !== false;
   const refetchInterval = options.refetchInterval ?? 10_000;
   const { data, isLoading, isFetching, isFetched, error, refetch } = useReadContract({
     address: FACTORY_ADDRESS,
@@ -215,7 +216,7 @@ export function useBatchedMarkets(addresses: `0x${string}`[], options: BatchHook
     contracts,
     allowFailure: true,
     query: {
-      enabled: addresses.length > 0,
+      enabled: addresses.length > 0 && options.enabled !== false,
       staleTime: 10_000,
       refetchInterval,
       refetchOnWindowFocus: false,
@@ -267,7 +268,7 @@ export function useBatchedUserPositions(addresses: `0x${string}`[], user?: `0x${
     contracts,
     allowFailure: true,
     query: {
-      enabled: addresses.length > 0 && Boolean(user),
+      enabled: addresses.length > 0 && Boolean(user) && options.enabled !== false,
       staleTime: 30_000,
       refetchInterval,
       refetchOnWindowFocus: false,

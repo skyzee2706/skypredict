@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http } from 'viem';
 import { seismicTestnet } from '../../../../lib/onchain/seismicChain';
 import { refreshIndexerCache } from '../../../../lib/indexer/build';
@@ -12,7 +12,17 @@ function getClient() {
     });
 }
 
-export async function POST() {
+function isAuthorized(request: NextRequest) {
+    const secret = process.env.INDEXER_SECRET;
+    if (!secret) return true;
+    return request.headers.get('x-indexer-secret') === secret;
+}
+
+export async function POST(request: NextRequest) {
+    if (!isAuthorized(request)) {
+        return NextResponse.json({ ok: false, error: 'Unauthorized indexer refresh' }, { status: 401 });
+    }
+
     try {
         const cache = await refreshIndexerCache(getClient());
         return NextResponse.json({ ok: true, ...cache });
@@ -22,6 +32,6 @@ export async function POST() {
     }
 }
 
-export async function GET() {
-    return POST();
+export async function GET(request: NextRequest) {
+    return POST(request);
 }

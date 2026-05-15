@@ -2,6 +2,7 @@ import { createPublicClient, parseAbiItem } from 'viem';
 import { FACTORY_ABI, FACTORY_ADDRESS, TOKEN_ADDRESS } from '../constants';
 import { LEADERBOARD_MAX_BLOCK_RANGE, LEADERBOARD_START_BLOCK } from '@/config/leaderboard';
 import { CachedActivity, CachedLeaderboardEntry, IndexerCache, getEmptyIndexerCache, readIndexerCache, writeIndexerCache } from './cache';
+import { saveIndexerCacheToSupabase } from './supabaseStore';
 
 const BetPlacedEvent = parseAbiItem(
     'event BetPlaced(address indexed user, uint8 outcome, uint256 amount, uint256 ethFeePaid)'
@@ -312,6 +313,7 @@ export async function refreshIndexerCache(client: PublicClient) {
     cache.lastProcessedBlock = targetBlock.toString();
     cache.updatedAt = Date.now();
     await writeIndexerCache(cache);
+    await saveIndexerCacheToSupabase(cache);
 
     return cache;
 }

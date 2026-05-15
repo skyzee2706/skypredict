@@ -1,18 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { createPublicClient, http, parseAbiItem } from "viem";
-import { seismicTestnet } from "@/lib/onchain/seismicChain";
-import { LEADERBOARD_MAX_BLOCK_RANGE, LEADERBOARD_START_BLOCK } from "@/config/leaderboard";
-import { FACTORY_ADDRESS, FACTORY_ABI } from "@/lib/constants";
-
-// New event signature: outcome is uint8 (0=SideA, 1=Draw, 2=SideB)
-const BetPlacedEvent = parseAbiItem(
-    "event BetPlaced(address indexed user, uint8 outcome, uint256 amount, uint256 ethFeePaid)"
-);
-
-const ClaimedEvent = parseAbiItem(
-    "event Claimed(address indexed user, uint256 payout)"
-);
+import { useEffect, useRef, useState } from "react";
+import { useAccount } from "wagmi";
 
 export interface LeaderboardEntry {
     address: `0x${string}`;
@@ -27,91 +15,88 @@ export interface LeaderboardEntry {
     pnlRank: number;
 }
 
-interface UserAggregate {
-    volume: bigint;
-    payout: bigint;
-    sideA: number;
-    draw: number;
-    sideB: number;
-}
+type ApiLeaderboardEntry = Omit<LeaderboardEntry, 'volume' | 'payout' | 'pnl'> & {
+    volume: string | bigint;
+    payout: string | bigint;
+    pnl: string | bigint;
+};
 
-function compareBigintDesc(a: bigint, b: bigint) {
-    if (a === b) return 0;
-    return b > a ? 1 : -1;
-}
+const DATABASE_FALLBACK_TIMEOUT_MS = 60_000;
 
-async function getLogsChunked<TEvent extends typeof BetPlacedEvent | typeof ClaimedEvent>(
-    client: ReturnType<typeof createPublicClient>,
-    address: `0x${string}`,
-    event: TEvent,
-    fromBlock: bigint,
-    toBlock: bigint,
-) {
-    const logs = [];
-    let cursor = fromBlock;
-
-    while (cursor <= toBlock) {
-        const chunkToBlock = cursor + LEADERBOARD_MAX_BLOCK_RANGE - 1n > toBlock
-            ? toBlock
-            : cursor + LEADERBOARD_MAX_BLOCK_RANGE - 1n;
-
-        const chunk = await client.getLogs({
-            address,
-            event,
-            fromBlock: cursor,
-            toBlock: chunkToBlock,
-        });
-
-        logs.push(...chunk);
-        cursor = chunkToBlock + 1n;
-    }
-
-    return logs;
+function normalizeEntry(entry: ApiLeaderboardEntry): LeaderboardEntry {
+    return {
+        ...entry,
+        volume: BigInt(entry.volume),
+        payout: BigInt(entry.payout),
+        pnl: BigInt(entry.pnl),
+    };
 }
 
 export function useLeaderboard() {
+    const { address } = useAccount();
     const [entries, setEntries] = useState<LeaderboardEntry[]>([]);
+    const [currentUser, setCurrentUser] = useState<LeaderboardEntry | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [source, setSource] = useState<string | null>(null);
+    const [updatedAt, setUpdatedAt] = useState<number | null>(null);
+    const [lastProcessedBlock, setLastProcessedBlock] = useState<string | null>(null);
+    const requestSeq = useRef(0);
 
     useEffect(() => {
+        let cancelled = false;
+
         async function fetchLeaderboard() {
             try {
                 setIsLoading((current) => current && entries.length === 0);
                 setError(null);
 
-                const response = await fetch('/api/indexer');
-                if (!response.ok) throw new Error('Failed to fetch leaderboard');
-                
-                const data = await response.json();
-                
-                // API JSON cannot carry bigint, so cached indexer returns numeric
-                // values as strings. Convert them back before UI math/sorting.
-                if (data.leaderboard) {
-                    const normalized = data.leaderboard.map((entry: Omit<LeaderboardEntry, 'volume' | 'payout' | 'pnl'> & {
-                        volume: string | bigint;
-                        payout: string | bigint;
-                        pnl: string | bigint;
-                    }) => ({
-                        ...entry,
-                        volume: BigInt(entry.volume),
-                        payout: BigInt(entry.payout),
-                        pnl: BigInt(entry.pnl),
-                    }));
-                    setEntries(normalized);
+                const currentSeq = ++requestSeq.current;
+                const controller = new AbortController();
+                const timeout = window.setTimeout(() => controller.abort(), DATABASE_FALLBACK_TIMEOUT_MS);
+                const params = new URLSearchParams();
+                if (address) params.set('address', address);
+
+                let response: Response;
+                try {
+                    response = await fetch(`/api/indexer?${params.toString()}`, { signal: controller.signal });
+                } catch (error) {
+                    window.clearTimeout(timeout);
+                    if (error instanceof DOMException && error.name === 'AbortError') {
+                        params.set('fallback', 'chain');
+                        response = await fetch(`/api/indexer?${params.toString()}`);
+                    } else {
+                        throw error;
+                    }
                 }
+                window.clearTimeout(timeout);
+                if (!response.ok) throw new Error('Failed to fetch leaderboard');
+
+                const data = await response.json();
+                if (cancelled || currentSeq !== requestSeq.current) return;
+
+                const normalized = (data.leaderboard ?? []).map(normalizeEntry);
+                setEntries(normalized);
+                setCurrentUser(data.currentUser ? normalizeEntry(data.currentUser) : null);
+                setSource(data.source ?? null);
+                setUpdatedAt(data.updatedAt ?? null);
+                setLastProcessedBlock(data.lastProcessedBlock ?? null);
             } catch (e: unknown) {
+                if (cancelled) return;
                 console.error("Leaderboard fetch error:", e);
                 setError(e instanceof Error ? e.message : "Failed to load leaderboard");
             } finally {
-                setIsLoading(false);
+                if (!cancelled) setIsLoading(false);
             }
         }
 
         fetchLeaderboard();
-        const interval = setInterval(fetchLeaderboard, 30_000);
-        return () => clearInterval(interval);
-    }, []);
+        const interval = setInterval(fetchLeaderboard, 120_000);
+        return () => {
+            cancelled = true;
+            clearInterval(interval);
+        };
+    }, [address]);
 
-    return { entries, isLoading, error };
+    return { entries, currentUser, isLoading, error, source, updatedAt, lastProcessedBlock };
 }
