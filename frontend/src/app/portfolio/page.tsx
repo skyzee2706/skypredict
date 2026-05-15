@@ -12,8 +12,21 @@ import { useToast } from "../providers/ToastProvider";
 
 const HISTORY_PAGE_SIZE = 20;
 
+type IndexedPortfolioPosition = {
+    market: `0x${string}`;
+    sideA: string;
+    draw: string;
+    sideB: string;
+    volume: string;
+    payout: string;
+    pnl: string;
+    claimed: boolean;
+    updatedAt?: string | null;
+};
+
 type CachedPortfolioResponse = {
     marketAddresses: `0x${string}`[];
+    positions?: IndexedPortfolioPosition[];
     activity: Array<{
         txHash: string;
         market: `0x${string}`;
@@ -41,6 +54,12 @@ type PortfolioPosition = {
 
 function formatAmount(value: number) {
     return value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function parseIndexedAmount(value: string | number | undefined | null) {
+    if (value === undefined || value === null) return 0;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function shortAddress(addr: string) {
@@ -72,18 +91,73 @@ export default function PortfolioPage() {
     );
     const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
 
+    const dbPositions = useMemo<PortfolioPosition[]>(() => {
+        const indexedPositions = cachedPortfolio?.positions ?? [];
+        if (!indexedPositions.length) return [];
+
+        return indexedPositions.map((position) => {
+            const marketAddress = position.market;
+            const sideA = parseIndexedAmount(position.sideA);
+            const draw = parseIndexedAmount(position.draw);
+            const sideB = parseIndexedAmount(position.sideB);
+            const volume = parseIndexedAmount(position.volume) || sideA + draw + sideB;
+            const payout = parseIndexedAmount(position.payout);
+            const pnl = parseIndexedAmount(position.pnl);
+            const positionValue = payout > 0 ? payout : volume + pnl;
+
+            return {
+                market: {
+                    id: marketAddress,
+                    contractId: marketAddress,
+                    title: `Market ${shortAddress(marketAddress)}`,
+                    ticker: 'INDEXED',
+                    sideAName: 'YES',
+                    drawName: 'DRAW',
+                    sideBName: 'NO',
+                    description: 'Indexed from database. Market metadata is refreshed from chain when available.',
+                    type: 'crypto',
+                    category: 'CRYPTO',
+                    identifier: marketAddress,
+                    creationDate: 0,
+                    deadline: 0,
+                    resolutionSource: 'Indexed database',
+                    resolutionRule: 'Position/accounting data is loaded from the Supabase indexer.',
+                    liquidity: volume,
+                    volume,
+                    state: position.claimed ? 'RESOLVED' : 'ACTIVE',
+                    resolvedOutcome: undefined,
+                    probYes: 0,
+                    probDraw: 0,
+                    probNo: 0,
+                    percentChange: 0,
+                    statsLoading: false,
+                } as MarketData,
+                sideA,
+                draw,
+                sideB,
+                total: volume,
+                claimed: position.claimed,
+                canClaim: false,
+                userWon: positionValue > volume,
+                positionValue,
+            };
+        });
+    }, [cachedPortfolio]);
+
+    const displayedPositions = dbPositions.length > 0 ? dbPositions : positions;
+
     const userStats = useMemo(() => {
-        const volume = positions.reduce((sum, position) => sum + position.total, 0);
-        const realizedOrClaimableValue = positions.reduce((sum, position) => sum + position.positionValue, 0);
+        const volume = displayedPositions.reduce((sum, position) => sum + position.total, 0);
+        const realizedOrClaimableValue = displayedPositions.reduce((sum, position) => sum + position.positionValue, 0);
         const pnl = realizedOrClaimableValue - volume;
         const pnlPercent = volume > 0 ? (pnl / volume) * 100 : 0;
         return {
             volume,
             pnl,
             pnlPercent,
-            historyCount: cachedPortfolio?.activity.length || positions.length,
+            historyCount: cachedPortfolio?.activity.length || displayedPositions.length,
         };
-    }, [cachedPortfolio, positions]);
+    }, [cachedPortfolio, displayedPositions]);
 
     // Fast path for production: use the server-side indexer cache first so we
     // only check markets this wallet has interacted with. If the cache is empty
@@ -190,9 +264,10 @@ export default function PortfolioPage() {
     }, []);
 
     const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || (factoryFetched && !factoryLoading && !factoryFetching);
-    const hasCheckedPositions = isConnected && liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching;
-    const needsMarketDetails = batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
+    const hasDbPositions = dbPositions.length > 0;
+    const hasCheckedPositions = hasDbPositions || (isConnected && liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching);
+    const needsMarketDetails = !hasDbPositions && batchedPositions.length > 0;
+    const hasLoadedPositionMarkets = hasDbPositions || !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
     const hasNoIndexedMarkets = isConnected && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
     const isLoading = isConnected && !hasNoIndexedMarkets && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
@@ -211,8 +286,8 @@ export default function PortfolioPage() {
     };
 
     const sortedPositions = useMemo(
-        () => [...positions].sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline)),
-        [positions]
+        () => [...displayedPositions].sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline)),
+        [displayedPositions]
     );
     const totalHistoryPages = Math.max(1, Math.ceil(sortedPositions.length / HISTORY_PAGE_SIZE));
     const currentHistoryPage = Math.min(historyPage, totalHistoryPages);

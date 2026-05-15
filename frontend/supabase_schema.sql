@@ -7,9 +7,25 @@ create table if not exists indexer_state (
 create table if not exists user_portfolios (
   user_address text not null,
   market_address text not null,
+  side_a_amount numeric not null default 0,
+  draw_amount numeric not null default 0,
+  side_b_amount numeric not null default 0,
+  volume numeric not null default 0,
+  payout numeric not null default 0,
+  pnl numeric not null default 0,
+  claimed boolean not null default false,
   updated_at timestamptz not null default now(),
   primary key (user_address, market_address)
 );
+
+alter table user_portfolios
+  add column if not exists side_a_amount numeric not null default 0,
+  add column if not exists draw_amount numeric not null default 0,
+  add column if not exists side_b_amount numeric not null default 0,
+  add column if not exists volume numeric not null default 0,
+  add column if not exists payout numeric not null default 0,
+  add column if not exists pnl numeric not null default 0,
+  add column if not exists claimed boolean not null default false;
 
 create index if not exists idx_user_portfolios_user
 on user_portfolios (user_address);

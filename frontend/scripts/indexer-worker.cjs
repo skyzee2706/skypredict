@@ -73,6 +73,7 @@ function getUser(map, address) {
       sideB: 0,
       trades: 0,
       markets: new Set(),
+      positions: new Map(),
       activities: [],
     });
   }
@@ -116,9 +117,24 @@ async function readExistingUsers() {
     user.trades = Number(row.total_bets || 0);
   }
 
-  const { data: portfolioRows, error: pfError } = await supabase.from('user_portfolios').select('user_address, market_address');
+  const { data: portfolioRows, error: pfError } = await supabase
+    .from('user_portfolios')
+    .select('user_address, market_address, side_a_amount, draw_amount, side_b_amount, volume, payout, pnl, claimed');
   if (pfError) throw pfError;
-  for (const row of portfolioRows || []) getUser(users, row.user_address).markets.add(normalize(row.market_address));
+  for (const row of portfolioRows || []) {
+    const user = getUser(users, row.user_address);
+    const market = normalize(row.market_address);
+    user.markets.add(market);
+    user.positions.set(market, {
+      sideA: BigInt(String(row.side_a_amount || '0')),
+      draw: BigInt(String(row.draw_amount || '0')),
+      sideB: BigInt(String(row.side_b_amount || '0')),
+      volume: BigInt(String(row.volume || '0')),
+      payout: BigInt(String(row.payout || '0')),
+      pnl: BigInt(String(row.pnl || '0')),
+      claimed: Boolean(row.claimed),
+    });
+  }
 
   const { data: activityRows, error: activityError } = await supabase
     .from('user_activities')
@@ -311,10 +327,11 @@ async function reconcilePositions(users) {
       const resolved = Boolean(marketState[0]);
       const winner = Number(marketState[1] || 0);
       const winningPosition = winner === 1 ? draw : winner === 2 ? sideB : sideA;
+      let positionValue = 0n;
 
       if (!resolved) {
         // Unrealized position: keep open markets neutral, same as current stake value.
-        user.positionValue += total;
+        positionValue = total;
       } else if (winningPosition > 0n) {
         // Match PredictionMarket.claim():
         // totalPayout = userWinningBet * totalPool / winningPool
@@ -327,9 +344,20 @@ async function reconcilePositions(users) {
         if (totalPool > 0n && winningPool > 0n) {
           const grossPayout = (winningPosition * totalPool) / winningPool;
           const fee = (grossPayout * 10n) / 100n;
-          user.positionValue += grossPayout - fee;
+          positionValue = grossPayout - fee;
         }
       }
+
+      user.positionValue += positionValue;
+      user.positions.set(market, {
+        sideA,
+        draw,
+        sideB,
+        volume: total,
+        payout: positionValue,
+        pnl: positionValue - total,
+        claimed: Boolean(raw[3]),
+      });
     }
 
     // PNL is claimable/current value minus trading volume.
@@ -372,7 +400,27 @@ async function save(users, leaderboardRows, lastProcessedBlock) {
 
   for (const user of users.values()) {
     for (const market of user.markets) {
-      portfolioRows.push({ user_address: user.address, market_address: market, updated_at: now });
+      const position = user.positions.get(market) || {
+        sideA: 0n,
+        draw: 0n,
+        sideB: 0n,
+        volume: 0n,
+        payout: 0n,
+        pnl: 0n,
+        claimed: false,
+      };
+      portfolioRows.push({
+        user_address: user.address,
+        market_address: market,
+        side_a_amount: position.sideA.toString(),
+        draw_amount: position.draw.toString(),
+        side_b_amount: position.sideB.toString(),
+        volume: position.volume.toString(),
+        payout: position.payout.toString(),
+        pnl: position.pnl.toString(),
+        claimed: Boolean(position.claimed),
+        updated_at: now,
+      });
     }
     activityRows.push(...user.activities);
   }

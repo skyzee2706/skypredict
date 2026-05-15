@@ -8,6 +8,13 @@ const DEFAULT_LEADERBOARD_LIMIT = 20;
 type PortfolioRow = {
   user_address: string;
   market_address: string;
+  side_a_amount?: string | number | null;
+  draw_amount?: string | number | null;
+  side_b_amount?: string | number | null;
+  volume?: string | number | null;
+  payout?: string | number | null;
+  pnl?: string | number | null;
+  claimed?: boolean | null;
   updated_at?: string;
 };
 
@@ -172,7 +179,7 @@ export async function readSupabasePortfolio(address: string, limit = DEFAULT_ACT
   const [portfolioResult, activityResult, stateResult] = await Promise.all([
     supabase
       .from('user_portfolios')
-      .select('market_address')
+      .select('*')
       .eq('user_address', user)
       .order('updated_at', { ascending: false }),
     supabase
@@ -192,10 +199,23 @@ export async function readSupabasePortfolio(address: string, limit = DEFAULT_ACT
   if (activityResult.error) throw activityResult.error;
   if (stateResult.error) throw stateResult.error;
 
+  const portfolioRows = (portfolioResult.data ?? []) as PortfolioRow[];
+
   return {
     updatedAt: stateResult.data?.updated_at ? Date.parse(stateResult.data.updated_at) : 0,
     lastProcessedBlock: stateResult.data?.last_processed_block ? String(stateResult.data.last_processed_block) : '0',
-    marketAddresses: ((portfolioResult.data ?? []) as PortfolioRow[]).map((row) => normalizeAddress(row.market_address)),
+    marketAddresses: portfolioRows.map((row) => normalizeAddress(row.market_address)),
+    positions: portfolioRows.map((row) => ({
+      market: normalizeAddress(row.market_address),
+      sideA: String(row.side_a_amount ?? '0'),
+      draw: String(row.draw_amount ?? '0'),
+      sideB: String(row.side_b_amount ?? '0'),
+      volume: String(row.volume ?? '0'),
+      payout: String(row.payout ?? '0'),
+      pnl: String(row.pnl ?? '0'),
+      claimed: Boolean(row.claimed),
+      updatedAt: row.updated_at ?? null,
+    })),
     activity: ((activityResult.data ?? []) as ActivityRow[]).map(toActivity),
     cached: true,
     source: 'supabase' as const,
