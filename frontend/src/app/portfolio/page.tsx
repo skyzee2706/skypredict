@@ -32,8 +32,11 @@ type CachedPortfolioResponse = {
         txHash: string;
         market: `0x${string}`;
         type: 'BET' | 'CLAIM';
+        outcome?: number;
         amount: string;
         blockNumber: string;
+        logIndex: number;
+        timestamp: number;
     }>;
     updatedAt: number;
     source?: string;
@@ -275,8 +278,8 @@ export default function PortfolioPage() {
     const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || factoryFetched;
     const hasDbPositions = dbPositions.length > 0;
     const hasCheckedPositions = hasDbPositions || !hasWalletAddress || (!hasDatabasePortfolio && !shouldUseChainFallback) || (liveAddresses.length > 0 && positionsFetched);
-    const needsMarketDetails = hasDbPositions || batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = !needsMarketDetails || marketsFetched;
+    const needsMarketDetails = !hasDbPositions && batchedPositions.length > 0;
+    const hasLoadedPositionMarkets = hasDbPositions || !needsMarketDetails || marketsFetched;
     const hasNoIndexedMarkets = hasWalletAddress && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
     const isLoading = hasWalletAddress && !hasNoIndexedMarkets && (portfolioCacheLoading || !hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
@@ -294,20 +297,92 @@ export default function PortfolioPage() {
         }
     };
 
-    const sortedPositions = useMemo(
-        () => [...displayedPositions].sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline)),
-        [displayedPositions]
-    );
-    const totalHistoryPages = Math.max(1, Math.ceil(sortedPositions.length / HISTORY_PAGE_SIZE));
+    const historyItems = useMemo(() => {
+        const betActivities = (cachedPortfolio?.activity ?? []).filter((activity) => activity.type === 'BET');
+
+        if (betActivities.length > 0) {
+            const marketByAddress = new Map(displayedPositions.map((position) => [position.market.contractId.toLowerCase(), position]));
+
+            return betActivities.map((activity) => {
+                const aggregatePosition = marketByAddress.get(activity.market.toLowerCase());
+                const market = aggregatePosition?.market ?? batchedMarkets.find((item) => item.contractId.toLowerCase() === activity.market.toLowerCase()) ?? {
+                    id: activity.market,
+                    contractId: activity.market,
+                    title: `Market ${shortAddress(activity.market)}`,
+                    ticker: 'INDEXED',
+                    sideAName: 'YES',
+                    drawName: 'DRAW',
+                    sideBName: 'NO',
+                    description: 'Indexed from database. Market metadata is refreshed from chain when available.',
+                    type: 'crypto',
+                    category: 'CRYPTO',
+                    identifier: activity.market,
+                    creationDate: 0,
+                    deadline: 0,
+                    resolutionSource: 'Indexed database',
+                    resolutionRule: 'Activity data is loaded from the Supabase indexer.',
+                    liquidity: 0,
+                    volume: 0,
+                    state: 'ACTIVE',
+                    resolvedOutcome: undefined,
+                    probYes: 0,
+                    probDraw: 0,
+                    probNo: 0,
+                    percentChange: 0,
+                    statsLoading: false,
+                } as MarketData;
+                const amount = parseIndexedAmount(activity.amount);
+                const inferredOutcome = activity.outcome ?? (
+                    aggregatePosition?.sideA && aggregatePosition.sideA > 0 ? 0 :
+                        aggregatePosition?.draw && aggregatePosition.draw > 0 ? 1 :
+                            aggregatePosition?.sideB && aggregatePosition.sideB > 0 ? 2 :
+                                undefined
+                );
+                const outcome = inferredOutcome === 0 ? (market.sideAName || 'YES') : inferredOutcome === 1 ? (market.drawName || 'DRAW') : inferredOutcome === 2 ? (market.sideBName || 'NO') : 'Bet';
+
+                return {
+                    id: `${activity.txHash}-${activity.logIndex}`,
+                    market,
+                    total: amount,
+                    sideA: inferredOutcome === 0 ? amount : 0,
+                    draw: inferredOutcome === 1 ? amount : 0,
+                    sideB: inferredOutcome === 2 ? amount : 0,
+                    outcome,
+                    blockNumber: activity.blockNumber,
+                    txHash: activity.txHash,
+                    timestamp: activity.timestamp,
+                    position: aggregatePosition,
+                };
+            }).sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
+        }
+
+        return [...displayedPositions]
+            .sort((a, b) => Number(b.market.deadline) - Number(a.market.deadline))
+            .map((position) => ({
+                id: position.market.contractId,
+                market: position.market,
+                total: position.total,
+                sideA: position.sideA,
+                draw: position.draw,
+                sideB: position.sideB,
+                outcome: 'Aggregate Position',
+                blockNumber: String(position.market.deadline ?? 0),
+                txHash: undefined,
+                timestamp: 0,
+                position,
+            }));
+    }, [batchedMarkets, cachedPortfolio, displayedPositions]);
+
+    const totalHistoryPages = Math.max(1, Math.ceil(historyItems.length / HISTORY_PAGE_SIZE));
     const currentHistoryPage = Math.min(historyPage, totalHistoryPages);
-    const paginatedPositions = sortedPositions.slice(
+    const paginatedHistoryItems = historyItems.slice(
         (currentHistoryPage - 1) * HISTORY_PAGE_SIZE,
         currentHistoryPage * HISTORY_PAGE_SIZE
     );
 
     useEffect(() => {
         setHistoryPage(1);
-    }, [address, sortedPositions.length]);
+    }, [address, historyItems.length]);
 
     return (
         <>
@@ -323,7 +398,8 @@ export default function PortfolioPage() {
             />
 
             <div className={styles.mainContainer}>
-                <div style={{ maxWidth: "1080px", margin: "0 auto", padding: "32px 16px", width: "100%" }}>
+                <div className={styles.contentArea}>
+                    <div className={styles.scrollContent} style={{ maxWidth: "1080px", margin: "0 auto", paddingTop: "32px", paddingBottom: "48px", width: "100%" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "18px", alignItems: "flex-end", flexWrap: "wrap", marginBottom: "24px" }}>
                         <div>
                             <h1 style={{ fontSize: "34px", fontWeight: 950, letterSpacing: "-1px", background: "linear-gradient(135deg,#22c55e,#6366f1,#a78bfa)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
@@ -381,19 +457,19 @@ export default function PortfolioPage() {
                         </div>
                     )}
 
-                    {isConnected && !isLoading && sortedPositions.length === 0 && (
+                    {isConnected && !isLoading && historyItems.length === 0 && (
                         <div style={{ padding: "42px", textAlign: "center", borderRadius: "22px", border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-muted)" }}>
                             No trading history yet.
                         </div>
                     )}
 
-                    {isConnected && !isLoading && sortedPositions.length > 0 && (
+                    {isConnected && !isLoading && historyItems.length > 0 && (
                         <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
                                 <div>
                                     <h2 style={{ color: "var(--text-primary)", fontSize: "20px", fontWeight: 950 }}>Trading History</h2>
                                     <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: "4px" }}>
-                                        Showing {((currentHistoryPage - 1) * HISTORY_PAGE_SIZE) + 1}-{Math.min(currentHistoryPage * HISTORY_PAGE_SIZE, sortedPositions.length)} of {sortedPositions.length} positions
+                                        Showing {((currentHistoryPage - 1) * HISTORY_PAGE_SIZE) + 1}-{Math.min(currentHistoryPage * HISTORY_PAGE_SIZE, historyItems.length)} of {historyItems.length} bets
                                     </p>
                                 </div>
                                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -418,36 +494,56 @@ export default function PortfolioPage() {
                             </div>
 
                             <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "980px", overflowY: "auto", paddingRight: "6px" }}>
-                                {paginatedPositions.map((position) => {
-                                    const market = position.market;
+                                {paginatedHistoryItems.map((item) => {
+                                    const market = item.market;
+                                    const claimPosition = item.position;
+                                    const isResolved = market.state === "RESOLVED" || market.state === "UNDETERMINED";
+                                    const isClaimed = Boolean(claimPosition?.claimed);
+                                    const isWinner = isResolved && (Boolean(claimPosition?.userWon) || isClaimed);
+                                    const isClaimable = Boolean(claimPosition?.canClaim);
+                                    const statusLabel = !isResolved ? "Running" : isWinner ? (isClaimed ? "Claimed" : "Win") : "Lose";
+                                    const statusColor = !isResolved ? "#facc15" : isWinner ? "#22c55e" : "#fb7185";
                                     return (
-                                        <div key={market.contractId} style={{ padding: "18px", borderRadius: "20px", border: "1px solid var(--border)", background: "var(--bg-card)", display: "grid", gridTemplateColumns: "1.5fr 1fr auto", gap: "16px", alignItems: "center" }}>
+                                        <div key={item.id} style={{ padding: "12px 14px", borderRadius: "16px", border: `1px solid ${statusColor}55`, background: "linear-gradient(135deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018))", boxShadow: `inset 0 0 0 1px rgba(255,255,255,0.035), 0 8px 22px ${statusColor}14`, display: "grid", gridTemplateColumns: "minmax(0,1.45fr) minmax(240px,1fr) auto", gap: "12px", alignItems: "center" }}>
                                             <div>
-                                                <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "6px" }}>{market.title}</p>
-                                                <p style={{ color: "var(--text-muted)", fontSize: "12px" }}>
-                                                    {market.category} · {market.state === "RESOLVED" ? "Finalized" : market.state} · Winner: {market.resolvedOutcome || "-"}
+                                                <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "3px", fontSize: "13px", lineHeight: 1.25 }}>{market.title}</p>
+                                                <p style={{ color: "var(--text-muted)", fontSize: "11px" }}>
+                                                    {market.category} · {market.state === "RESOLVED" ? "Finalized" : market.state} · Block #{item.blockNumber}
                                                 </p>
+                                                {item.txHash && (
+                                                    <p style={{ color: "var(--text-muted)", fontSize: "10px", marginTop: "3px", fontFamily: "monospace" }}>
+                                                        Tx {shortAddress(item.txHash)}
+                                                    </p>
+                                                )}
                                             </div>
-                                            <div style={{ color: "var(--text-muted)", fontSize: "12px", lineHeight: 1.7 }}>
-                                                <div>Total Bet: <b style={{ color: "var(--text-primary)" }}>{formatAmount(position.total)} SkyUSD</b></div>
-                                                <div>{market.sideAName || "YES"}: {formatAmount(position.sideA)} · Draw: {formatAmount(position.draw)} · {market.sideBName || "NO"}: {formatAmount(position.sideB)}</div>
-                                                {position.canClaim && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable: {formatAmount(position.positionValue)} SkyUSD</div>}
-                                                {position.claimed && position.userWon && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed win: +{formatAmount(position.positionValue)} SkyUSD</div>}
-                                                {position.claimed && !position.userWon && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Already claimed</div>}
+                                            <div style={{ color: "var(--text-muted)", fontSize: "11px", lineHeight: 1.45 }}>
+                                                <div>Bet: <b style={{ color: "var(--text-primary)" }}>{formatAmount(item.total)} SkyUSD</b></div>
+                                                <div>Outcome: <b style={{ color: "var(--text-primary)" }}>{item.outcome}</b></div>
+                                                <div>Status: <b style={{ color: statusColor }}>{statusLabel}</b></div>
+                                                <div>{market.sideAName || "YES"}: {formatAmount(item.sideA)} · Draw: {formatAmount(item.draw)} · {market.sideBName || "NO"}: {formatAmount(item.sideB)}</div>
+                                                {isClaimable && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable total: {formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
+                                                {isClaimed && isWinner && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed win: +{formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
                                             </div>
-                                            <button
-                                                onClick={() => handleClaim(position)}
-                                                disabled={!position.canClaim || claiming === market.contractId}
-                                                style={{ border: "0", borderRadius: "14px", padding: "12px 16px", fontWeight: 900, cursor: position.canClaim ? "pointer" : "not-allowed", color: position.canClaim ? "white" : "var(--text-muted)", background: position.canClaim ? "linear-gradient(135deg,#22c55e,#16a34a)" : "rgba(255,255,255,0.06)" }}
-                                            >
-                                                {claiming === market.contractId ? "Claiming…" : position.canClaim ? "Claim" : position.claimed ? "Claimed" : "Not claimable"}
-                                            </button>
+                                            {isClaimable ? (
+                                                <button
+                                                    onClick={() => claimPosition && handleClaim(claimPosition)}
+                                                    disabled={claiming === market.contractId}
+                                                    style={{ border: "0", borderRadius: "12px", padding: "9px 13px", fontWeight: 900, cursor: claiming === market.contractId ? "wait" : "pointer", color: "white", background: "linear-gradient(135deg,#22c55e,#16a34a)", boxShadow: "0 8px 18px rgba(34,197,94,0.22)" }}
+                                                >
+                                                    {claiming === market.contractId ? "Claiming…" : "Claim"}
+                                                </button>
+                                            ) : (
+                                                <div style={{ minWidth: "92px", textAlign: "center", borderRadius: "12px", padding: "9px 13px", fontWeight: 950, fontSize: "12px", color: statusColor, background: "rgba(255,255,255,0.045)", border: `1px solid ${statusColor}55` }}>
+                                                    {statusLabel}
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
                             </div>
                         </div>
                     )}
+                    </div>
                 </div>
             </div>
         </>

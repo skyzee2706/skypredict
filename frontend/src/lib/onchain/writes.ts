@@ -100,9 +100,11 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     throw new Error(`Insufficient SkyUSD balance. You have ${Number(balance) / SKYUSD_MULTIPLIER} but need ${amount}.`);
   }
 
-  // Check Router allowance — auto-approve if needed
-  const approved = await isRouterApproved(account.address);
-  if (!approved) {
+  // Check Router allowance for this exact bet amount — auto-approve if needed.
+  // Do not rely on the UI's "unlimited approval" threshold; a smaller existing
+  // allowance can still be valid for the current amount.
+  const allowance = await checkUsdlAllowance(account.address, ROUTER_ADDRESS);
+  if (allowance < amountInUnits) {
     await approveRouter();
   }
 
