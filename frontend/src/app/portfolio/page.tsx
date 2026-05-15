@@ -74,13 +74,13 @@ export default function PortfolioPage() {
     const [positions, setPositions] = useState<PortfolioPosition[]>([]);
     const [claiming, setClaiming] = useState<string | null>(null);
     const [historyPage, setHistoryPage] = useState(1);
-    const shouldPollPortfolio = positions.length === 0;
-    const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const [portfolioCacheLoading, setPortfolioCacheLoading] = useState(false);
     const [allowChainFallback, setAllowChainFallback] = useState(false);
     const hasWalletAddress = isConnected && Boolean(address);
     const hasDatabasePortfolio = Boolean(cachedPortfolio?.marketAddresses?.length);
+    const shouldPollPortfolio = !cachedPortfolio?.positions?.length && positions.length === 0;
+    const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
     const shouldUseChainFallback = allowChainFallback && !hasDatabasePortfolio;
     const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval, enabled: shouldUseChainFallback });
     const liveAddresses = useMemo(() => {
@@ -272,11 +272,11 @@ export default function PortfolioPage() {
         // button API stable without reintroducing direct per-market RPC loops.
     }, []);
 
-    const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || (factoryFetched && !factoryLoading && !factoryFetching);
+    const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || factoryFetched;
     const hasDbPositions = dbPositions.length > 0;
-    const hasCheckedPositions = hasDbPositions || !hasWalletAddress || (!hasDatabasePortfolio && !shouldUseChainFallback) || (liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching);
+    const hasCheckedPositions = hasDbPositions || !hasWalletAddress || (!hasDatabasePortfolio && !shouldUseChainFallback) || (liveAddresses.length > 0 && positionsFetched);
     const needsMarketDetails = hasDbPositions || batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
+    const hasLoadedPositionMarkets = !needsMarketDetails || marketsFetched;
     const hasNoIndexedMarkets = hasWalletAddress && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
     const isLoading = hasWalletAddress && !hasNoIndexedMarkets && (portfolioCacheLoading || !hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
