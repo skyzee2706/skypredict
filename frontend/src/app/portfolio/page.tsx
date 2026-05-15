@@ -8,6 +8,7 @@ import styles from "../page.module.css";
 import { claimRewards } from "@/lib/onchain/writes";
 import { MarketData } from "@/data/markets";
 import { useBatchedMarkets, useBatchedUserPositions, useFactoryMarkets } from "@/hooks/useMarketBatches";
+import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useToast } from "../providers/ToastProvider";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -59,7 +60,7 @@ function formatAmount(value: number) {
 function parseIndexedAmount(value: string | number | undefined | null) {
     if (value === undefined || value === null) return 0;
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
+    return Number.isFinite(parsed) ? parsed / SKYUSD_MULTIPLIER : 0;
 }
 
 function shortAddress(addr: string) {
@@ -86,8 +87,8 @@ export default function PortfolioPage() {
     }, [addresses, cachedPortfolio]);
     const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
     const positionMarketAddresses = useMemo(
-        () => batchedPositions.map((position) => position.marketAddress),
-        [batchedPositions]
+        () => (hasDatabasePortfolio ? liveAddresses : batchedPositions.map((position) => position.marketAddress)),
+        [batchedPositions, hasDatabasePortfolio, liveAddresses]
     );
     const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
 
@@ -97,6 +98,7 @@ export default function PortfolioPage() {
 
         return indexedPositions.map((position) => {
             const marketAddress = position.market;
+            const marketMetadata = batchedMarkets.find((market) => market.contractId.toLowerCase() === marketAddress.toLowerCase());
             const sideA = parseIndexedAmount(position.sideA);
             const draw = parseIndexedAmount(position.draw);
             const sideB = parseIndexedAmount(position.sideB);
@@ -106,7 +108,7 @@ export default function PortfolioPage() {
             const positionValue = payout > 0 ? payout : volume + pnl;
 
             return {
-                market: {
+                market: marketMetadata ?? {
                     id: marketAddress,
                     contractId: marketAddress,
                     title: `Market ${shortAddress(marketAddress)}`,
@@ -142,7 +144,7 @@ export default function PortfolioPage() {
                 positionValue,
             };
         });
-    }, [cachedPortfolio]);
+    }, [batchedMarkets, cachedPortfolio]);
 
     const displayedPositions = dbPositions.length > 0 ? dbPositions : positions;
 
@@ -155,7 +157,7 @@ export default function PortfolioPage() {
             volume,
             pnl,
             pnlPercent,
-            historyCount: cachedPortfolio?.activity.length || displayedPositions.length,
+            historyCount: cachedPortfolio?.activity.filter((activity) => activity.type === 'BET').length || displayedPositions.length,
         };
     }, [cachedPortfolio, displayedPositions]);
 
