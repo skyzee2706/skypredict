@@ -77,7 +77,9 @@ export default function PortfolioPage() {
     const shouldPollPortfolio = positions.length === 0;
     const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
+    const [portfolioCacheLoading, setPortfolioCacheLoading] = useState(false);
     const [allowChainFallback, setAllowChainFallback] = useState(false);
+    const hasWalletAddress = isConnected && Boolean(address);
     const hasDatabasePortfolio = Boolean(cachedPortfolio?.marketAddresses?.length);
     const shouldUseChainFallback = allowChainFallback && !hasDatabasePortfolio;
     const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval, enabled: shouldUseChainFallback });
@@ -169,10 +171,13 @@ export default function PortfolioPage() {
 
         if (!address) {
             setCachedPortfolio(null);
+            setPortfolioCacheLoading(false);
+            setAllowChainFallback(false);
             return;
         }
 
         setCachedPortfolio(null);
+        setPortfolioCacheLoading(true);
         setAllowChainFallback(false);
         const controller = new AbortController();
         const timeout = window.setTimeout(() => {
@@ -191,6 +196,7 @@ export default function PortfolioPage() {
                 } else {
                     setAllowChainFallback(true);
                 }
+                setPortfolioCacheLoading(false);
             })
             .catch((error) => {
                 if (cancelled) return;
@@ -201,6 +207,7 @@ export default function PortfolioPage() {
                     window.clearTimeout(timeout);
                 }
                 setAllowChainFallback(true);
+                setPortfolioCacheLoading(false);
             });
 
         return () => {
@@ -267,11 +274,11 @@ export default function PortfolioPage() {
 
     const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || (factoryFetched && !factoryLoading && !factoryFetching);
     const hasDbPositions = dbPositions.length > 0;
-    const hasCheckedPositions = hasDbPositions || (isConnected && liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching);
-    const needsMarketDetails = !hasDbPositions && batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = hasDbPositions || !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
-    const hasNoIndexedMarkets = isConnected && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
-    const isLoading = isConnected && !hasNoIndexedMarkets && (!hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
+    const hasCheckedPositions = hasDbPositions || !hasWalletAddress || (!hasDatabasePortfolio && !shouldUseChainFallback) || (liveAddresses.length > 0 && positionsFetched && !positionsLoading && !positionsFetching);
+    const needsMarketDetails = hasDbPositions || batchedPositions.length > 0;
+    const hasLoadedPositionMarkets = !needsMarketDetails || (marketsFetched && !marketsLoading && !marketsFetching);
+    const hasNoIndexedMarkets = hasWalletAddress && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
+    const isLoading = hasWalletAddress && !hasNoIndexedMarkets && (portfolioCacheLoading || !hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
 
     const handleClaim = async (position: PortfolioPosition) => {
         setClaiming(position.market.contractId);
