@@ -3,7 +3,9 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type MarketSymbol = 'BTCUSDT' | 'ETHUSDT';
+type MarketSymbol = 'BTCUSDT' | 'ETHUSDT' | 'SOLUSDT' | 'XRPUSDT' | 'DOGEUSDT' | 'BNBUSDT';
+
+const SUPPORTED_SYMBOLS = new Set<MarketSymbol>(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'BNBUSDT']);
 
 type PriceSource = {
   id: string;
@@ -31,7 +33,8 @@ const priceSources: PriceSource[] = [
 
 function normalizeSymbol(value: string | null): MarketSymbol {
   const normalized = (value || 'BTC/USDT').replace('/', '').replace('-', '').toUpperCase();
-  return normalized === 'ETHUSDT' ? 'ETHUSDT' : 'BTCUSDT';
+  const withQuote = normalized.endsWith('USDT') ? normalized : `${normalized}USDT`;
+  return SUPPORTED_SYMBOLS.has(withQuote as MarketSymbol) ? (withQuote as MarketSymbol) : 'BTCUSDT';
 }
 
 function readNumericPath(data: unknown, path: Array<string | number>): number | null {
@@ -92,6 +95,7 @@ export async function GET(req: Request) {
 
     return NextResponse.json(
       {
+        symbol,
         price: finalPrice,
         sources: prices.length,
         timestamp: Math.floor(Date.now() / 1000)

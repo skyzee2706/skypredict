@@ -3,12 +3,15 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type MarketSymbol = 'BTCUSDT' | 'ETHUSDT';
+type MarketSymbol = 'BTCUSDT' | 'ETHUSDT' | 'SOLUSDT' | 'XRPUSDT' | 'DOGEUSDT' | 'BNBUSDT';
 type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
+
+const SUPPORTED_SYMBOLS = new Set<MarketSymbol>(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'XRPUSDT', 'DOGEUSDT', 'BNBUSDT']);
 
 function normalizeSymbol(value: string | null): MarketSymbol {
   const normalized = (value || 'BTC/USDT').replace('/', '').replace('-', '').toUpperCase();
-  return normalized === 'ETHUSDT' ? 'ETHUSDT' : 'BTCUSDT';
+  const withQuote = normalized.endsWith('USDT') ? normalized : `${normalized}USDT`;
+  return SUPPORTED_SYMBOLS.has(withQuote as MarketSymbol) ? (withQuote as MarketSymbol) : 'BTCUSDT';
 }
 
 function getSundayStartSeconds(): number {
@@ -65,6 +68,7 @@ export async function GET(req: Request) {
     return NextResponse.json(
       {
         history,
+        symbol,
         source: 'binance_1m',
         range_start: sundayTs,
         sources_count: history.length > 0 ? 1 : 0,

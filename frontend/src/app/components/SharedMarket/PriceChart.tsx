@@ -95,15 +95,28 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
         let isMounted = true;
         async function fetchLive() {
             try {
-                const res = await fetch(`/api/price?symbol=${encodeURIComponent(apiSymbol)}`, { cache: "no-store" });
+                const res = await fetch(`/api/price?symbol=${encodeURIComponent(apiSymbol)}&t=${Date.now()}`, { cache: "no-store" });
                 if (res.ok && isMounted) {
                     const data = await res.json();
-                    if (data.price > 0) setLivePrice(data.price);
+                    const price = Number(data.price);
+                    if (price > 0) {
+                        const now = Math.floor(Date.now() / 1000);
+                        setLivePrice(price);
+                        if (startTime && endTime && now >= startTime && now <= endTime) {
+                            setWsCandles(prev => {
+                                const withoutCurrentSecond = prev.filter(p => p.time !== now);
+                                return [...withoutCurrentSecond, { time: now, value: price }]
+                                    .filter(p => p.time >= startTime && p.time <= endTime)
+                                    .sort((a, b) => a.time - b.time)
+                                    .slice(-1200);
+                            });
+                        }
+                    }
                 }
             } catch { }
         }
         fetchLive();
-        const t = setInterval(fetchLive, 2000);
+        const t = setInterval(fetchLive, 1000);
         return () => { isMounted = false; clearInterval(t); };
     }, [endTime, startTime, apiSymbol]);
 

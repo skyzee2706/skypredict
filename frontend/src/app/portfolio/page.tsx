@@ -7,7 +7,7 @@ import Header from "../components/Header/Header";
 import styles from "../page.module.css";
 import { claimRewards } from "@/lib/onchain/writes";
 import { MarketData } from "@/data/markets";
-import { useBatchedMarkets, useBatchedUserPositions, useFactoryMarkets } from "@/hooks/useMarketBatches";
+import { useBatchedMarkets } from "@/hooks/useMarketBatches";
 import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useToast } from "../providers/ToastProvider";
 
@@ -42,7 +42,6 @@ type CachedPortfolioResponse = {
     source?: string;
 };
 
-const DATABASE_FALLBACK_TIMEOUT_MS = 6_000;
 
 type PortfolioPosition = {
     market: MarketData;
@@ -74,30 +73,13 @@ export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
     const { showToast } = useToast();
-    const [positions, setPositions] = useState<PortfolioPosition[]>([]);
     const [claiming, setClaiming] = useState<string | null>(null);
     const [historyPage, setHistoryPage] = useState(1);
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const [portfolioCacheLoading, setPortfolioCacheLoading] = useState(false);
-    const [allowChainFallback, setAllowChainFallback] = useState(false);
     const hasWalletAddress = isConnected && Boolean(address);
-    const hasDatabasePortfolio = Boolean(cachedPortfolio?.marketAddresses?.length);
-    const shouldPollPortfolio = !cachedPortfolio?.positions?.length && positions.length === 0;
-    const portfolioRefetchInterval = shouldPollPortfolio ? 10_000 : false;
-    const shouldUseChainFallback = allowChainFallback && !hasDatabasePortfolio;
-    const { addresses, isLoading: factoryLoading, isFetching: factoryFetching, isFetched: factoryFetched } = useFactoryMarkets({ refetchInterval: portfolioRefetchInterval, enabled: shouldUseChainFallback });
-    const liveAddresses = useMemo(() => {
-        const cached = cachedPortfolio?.marketAddresses ?? [];
-        return cached.length > 0 ? cached : addresses;
-    }, [addresses, cachedPortfolio]);
-    const { positions: batchedPositions, isLoading: positionsLoading, isFetching: positionsFetching, isFetched: positionsFetched } = useBatchedUserPositions(liveAddresses, address as `0x${string}` | undefined, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
-    const positionMarketAddresses = useMemo(
-        () => (hasDatabasePortfolio ? liveAddresses : batchedPositions.map((position) => position.marketAddress)),
-        [batchedPositions, hasDatabasePortfolio, liveAddresses]
-    );
-    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
-    void positionsLoading;
-    void positionsFetching;
+    const liveAddresses = useMemo(() => cachedPortfolio?.marketAddresses ?? [], [cachedPortfolio]);
+    const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching } = useBatchedMarkets(liveAddresses, { refetchInterval: false, enabled: liveAddresses.length > 0 });
     void marketsLoading;
     void marketsFetching;
 
@@ -155,7 +137,7 @@ export default function PortfolioPage() {
         });
     }, [batchedMarkets, cachedPortfolio]);
 
-    const displayedPositions = dbPositions.length > 0 ? dbPositions : positions;
+    const displayedPositions = dbPositions;
 
     const userStats = useMemo(() => {
         const volume = displayedPositions.reduce((sum, position) => sum + position.total, 0);
@@ -170,121 +152,54 @@ export default function PortfolioPage() {
         };
     }, [cachedPortfolio, displayedPositions]);
 
-    // Fast path for production: use the server-side indexer cache first so we
-    // only check markets this wallet has interacted with. If the cache is empty
-    // or unavailable, the batched on-chain hooks below still work as fallback.
+    // Database-only portfolio path: positions and activity come from the
+    // indexer/Supabase API. Claiming still sends the on-chain transaction.
     useEffect(() => {
         let cancelled = false;
 
         if (!address) {
             setCachedPortfolio(null);
             setPortfolioCacheLoading(false);
-            setAllowChainFallback(false);
             return;
         }
 
         setCachedPortfolio(null);
         setPortfolioCacheLoading(true);
-        setAllowChainFallback(false);
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => {
-            controller.abort();
-        }, DATABASE_FALLBACK_TIMEOUT_MS);
 
-        fetch(`/api/portfolio/${address}`, { cache: "no-store", signal: controller.signal })
+        fetch(`/api/portfolio/${address}?t=${Date.now()}`, { cache: "no-store" })
             .then((response) => (response.ok ? response.json() : null))
             .then((data: CachedPortfolioResponse | null) => {
                 if (cancelled) return;
-                window.clearTimeout(timeout);
-                if (data?.marketAddresses?.length || data?.activity?.length || data?.positions?.length) {
-                    setCachedPortfolio(data);
-                }
-                setAllowChainFallback(false);
+                setCachedPortfolio(data);
                 setPortfolioCacheLoading(false);
             })
             .catch((error) => {
                 if (cancelled) return;
-                if (error instanceof DOMException && error.name === 'AbortError') {
-                    console.warn("Portfolio database timed out, keeping the page responsive without automatic chain scan.");
-                } else {
-                    console.warn("Portfolio cache unavailable:", error);
-                    window.clearTimeout(timeout);
-                }
-                setAllowChainFallback(false);
+                console.warn("Portfolio database unavailable:", error);
                 setPortfolioCacheLoading(false);
             });
 
         return () => {
             cancelled = true;
-            window.clearTimeout(timeout);
-            controller.abort();
         };
     }, [address]);
 
-    useEffect(() => {
-        if (!address) {
-            setPositions([]);
-            return;
-        }
-
-        if (batchedMarkets.length === 0 || batchedPositions.length === 0) return;
-
-        const marketByAddress = new Map(batchedMarkets.map((market) => [market.contractId.toLowerCase(), market]));
-        const rows = batchedPositions
-            .map((position) => {
-                const market = marketByAddress.get(position.marketAddress.toLowerCase());
-                if (!market) return null;
-
-                const sideAName = market.sideAName || "YES";
-                const drawName = market.drawName || "DRAW";
-                const sideBName = market.sideBName || "NO";
-                let userWon = false;
-                let canClaim = false;
-
-                if (market.state === "UNDETERMINED") {
-                    userWon = true;
-                    canClaim = !position.claimed;
-                } else if (market.state === "RESOLVED") {
-                    userWon =
-                        (market.resolvedOutcome === sideAName && position.onSideA > 0) ||
-                        (market.resolvedOutcome === drawName && position.onDraw > 0) ||
-                        (market.resolvedOutcome === sideBName && position.onSideB > 0);
-                    canClaim = userWon && !position.claimed;
-                }
-
-                const positionValue = userWon ? position.total : 0;
-
-                return {
-                    market,
-                    sideA: position.onSideA,
-                    draw: position.onDraw,
-                    sideB: position.onSideB,
-                    total: position.total,
-                    claimed: position.claimed,
-                    canClaim,
-                    userWon,
-                    positionValue,
-                } as PortfolioPosition;
-            })
-            .filter((row): row is PortfolioPosition => row !== null);
-
-        setPositions(rows);
-    }, [address, batchedMarkets, batchedPositions]);
 
     const loadPortfolio = React.useCallback(async () => {
-        // Keep normal navigation lightweight. Only run the heavier on-chain scan
-        // when the user explicitly asks for a refresh.
-        if (!hasWalletAddress) return;
-        setAllowChainFallback(true);
-    }, [hasWalletAddress]);
+        if (!hasWalletAddress || !address) return;
+        setPortfolioCacheLoading(true);
+        try {
+            const response = await fetch(`/api/portfolio/${address}?t=${Date.now()}`, { cache: "no-store" });
+            const data = response.ok ? await response.json() as CachedPortfolioResponse : null;
+            setCachedPortfolio(data);
+        } catch (error) {
+            console.warn("Portfolio database refresh failed:", error);
+        } finally {
+            setPortfolioCacheLoading(false);
+        }
+    }, [address, hasWalletAddress]);
 
-    const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || factoryFetched;
-    const hasDbPositions = dbPositions.length > 0;
-    const hasCheckedPositions = hasDbPositions || !hasWalletAddress || (!hasDatabasePortfolio && !shouldUseChainFallback) || (liveAddresses.length > 0 && positionsFetched);
-    const needsMarketDetails = !hasDbPositions && batchedPositions.length > 0;
-    const hasLoadedPositionMarkets = hasDbPositions || !needsMarketDetails || marketsFetched;
-    const hasNoIndexedMarkets = hasWalletAddress && !hasDatabasePortfolio && allowChainFallback && factoryFetched && !factoryLoading && !factoryFetching && liveAddresses.length === 0;
-    const isLoading = hasWalletAddress && !hasNoIndexedMarkets && (portfolioCacheLoading || !hasLoadedFactory || !hasCheckedPositions || !hasLoadedPositionMarkets);
+    const isLoading = hasWalletAddress && portfolioCacheLoading;
 
     const handleClaim = async (position: PortfolioPosition) => {
         setClaiming(position.market.contractId);
