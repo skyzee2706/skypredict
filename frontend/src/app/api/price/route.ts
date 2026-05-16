@@ -1,45 +1,88 @@
 import { NextResponse } from 'next/server';
-import ccxt from 'ccxt';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type ExchangeLike = {
-  fetchTicker: (symbol: string) => Promise<{ last?: number | null }>;
+type MarketSymbol = 'BTCUSDT' | 'ETHUSDT';
+
+type PriceSource = {
+  id: string;
+  buildUrl: (symbol: MarketSymbol) => string;
+  readPrice: (data: unknown) => number | null;
 };
 
-const exchanges: Record<string, ExchangeLike> = {
-  binance: new ccxt.binance({ timeout: 5000 }) as unknown as ExchangeLike,
-  bybit: new ccxt.bybit({ timeout: 5000 }) as unknown as ExchangeLike,
-  mexc: new ccxt.mexc({ timeout: 5000 }) as unknown as ExchangeLike,
-  kucoin: new ccxt.kucoin({ timeout: 5000 }) as unknown as ExchangeLike,
-  gate: new ccxt.gate({ timeout: 5000 }) as unknown as ExchangeLike,
-  bitget: new ccxt.bitget({ timeout: 5000 }) as unknown as ExchangeLike,
-  okx: new ccxt.okx({ timeout: 5000 }) as unknown as ExchangeLike,
-  htx: new ccxt.htx({ timeout: 5000 }) as unknown as ExchangeLike,
-  bitmart: new ccxt.bitmart({ timeout: 5000 }) as unknown as ExchangeLike,
-  digifinex: new ccxt.digifinex({ timeout: 5000 }) as unknown as ExchangeLike
-};
+const priceSources: PriceSource[] = [
+  {
+    id: 'binance',
+    buildUrl: (symbol) => `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`,
+    readPrice: (data) => readNumericPath(data, ['price'])
+  },
+  {
+    id: 'bybit',
+    buildUrl: (symbol) => `https://api.bybit.com/v5/market/tickers?category=spot&symbol=${symbol}`,
+    readPrice: (data) => readNumericPath(data, ['result', 'list', 0, 'lastPrice'])
+  },
+  {
+    id: 'mexc',
+    buildUrl: (symbol) => `https://api.mexc.com/api/v3/ticker/price?symbol=${symbol}`,
+    readPrice: (data) => readNumericPath(data, ['price'])
+  }
+];
+
+function normalizeSymbol(value: string | null): MarketSymbol {
+  const normalized = (value || 'BTC/USDT').replace('/', '').replace('-', '').toUpperCase();
+  return normalized === 'ETHUSDT' ? 'ETHUSDT' : 'BTCUSDT';
+}
+
+function readNumericPath(data: unknown, path: Array<string | number>): number | null {
+  let current: unknown = data;
+
+  for (const key of path) {
+    if (typeof key === 'number') {
+      if (!Array.isArray(current)) return null;
+      current = current[key];
+      continue;
+    }
+
+    if (!current || typeof current !== 'object' || !(key in current)) return null;
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  const value = typeof current === 'number' ? current : Number(current);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
+
+async function fetchPrice(source: PriceSource, symbol: MarketSymbol): Promise<number | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(source.buildUrl(symbol), {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) return null;
+    return source.readPrice(await response.json());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const symbol = url.searchParams.get('symbol') || 'BTC/USDT';
-
-    const results = await Promise.allSettled(
-      Object.keys(exchanges).map(async (id) => {
-        try {
-          const ticker = await exchanges[id].fetchTicker(symbol);
-          return typeof ticker?.last === 'number' ? ticker.last : null;
-        } catch {
-          return null;
-        }
-      })
-    );
-
+    const symbol = normalizeSymbol(url.searchParams.get('symbol'));
+    const results = await Promise.allSettled(priceSources.map((source) => fetchPrice(source, symbol)));
     const prices = results
-      .filter((r): r is PromiseFulfilledResult<number | null> => r.status === 'fulfilled')
-      .map((r) => r.value)
-      .filter((p): p is number => p !== null && p > 0);
+      .filter((result): result is PromiseFulfilledResult<number | null> => result.status === 'fulfilled')
+      .map((result) => result.value)
+      .filter((price): price is number => price !== null);
 
     if (prices.length === 0) throw new Error(`Price sources unreachable for ${symbol}`);
 

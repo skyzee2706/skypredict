@@ -9,14 +9,22 @@ import styles from './page.module.css';
 export default function Home() {
   const router = useRouter();
 
+  const hardNavigate = React.useCallback((path: string) => {
+    if (typeof window !== 'undefined' && window.location.pathname !== path) {
+      window.location.assign(path);
+      return;
+    }
+    router.push(path);
+  }, [router]);
+
   return (
     <>
       <Header onNavigate={(page) => {
-        if (page === 'markets') router.push('/markets');
-        else if (page === 'faucet') router.push('/faucet');
-        else if (page === 'portfolio') router.push('/portfolio');
-        else if (page === 'leaderboard') router.push('/leaderboard');
-        else if (page === 'landing') router.push('/');
+        if (page === 'markets') hardNavigate('/markets');
+        else if (page === 'faucet') hardNavigate('/faucet');
+        else if (page === 'portfolio') hardNavigate('/portfolio');
+        else if (page === 'leaderboard') hardNavigate('/leaderboard');
+        else if (page === 'landing') hardNavigate('/');
       }} currentPage="landing" />
       <div className={styles.mainContainer}>
         <div className={styles.contentArea}>

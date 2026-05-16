@@ -72,11 +72,36 @@ const PrivyWalletContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
 export const WalletProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
     const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
+    const hasValidPrivyConfig =
+        !!appId &&
+        !!clientId &&
+        appId !== 'your_privy_app_id' &&
+        clientId !== 'your_privy_client_id';
+
+    if (!hasValidPrivyConfig) {
+        const disabledWalletValue: WalletContextValue = {
+            walletAddress: null,
+            isConnected: false,
+            isConnecting: false,
+            connect: async () => {
+                console.warn('Privy is not configured. Set NEXT_PUBLIC_PRIVY_APP_ID and NEXT_PUBLIC_PRIVY_CLIENT_ID.');
+            },
+            disconnect: async () => undefined,
+        };
+
+        return (
+            <WalletContext.Provider value={disabledWalletValue}>
+                <QueryClientProvider client={queryClient}>
+                    {children}
+                </QueryClientProvider>
+            </WalletContext.Provider>
+        );
+    }
 
     return (
         <PrivyProvider
-            appId={appId ?? ''}
-            clientId={clientId ?? ''}
+            appId={appId}
+            clientId={clientId}
             config={{
                 appearance: {
                     theme: 'dark',

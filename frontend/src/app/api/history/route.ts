@@ -1,86 +1,73 @@
 import { NextResponse } from 'next/server';
-import ccxt from 'ccxt';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type Candle = [number, number, number, number, number, number?];
-type ExchangeLike = {
-  fetchOHLCV: (symbol: string, timeframe?: string, since?: number, limit?: number) => Promise<Candle[]>;
-};
+type MarketSymbol = 'BTCUSDT' | 'ETHUSDT';
+type BinanceKline = [number, string, string, string, string, string, number, string, number, string, string, string];
 
-const exchanges: Record<string, ExchangeLike> = {
-  binance: new ccxt.binance({ timeout: 10000 }) as unknown as ExchangeLike,
-  bybit: new ccxt.bybit({ timeout: 10000 }) as unknown as ExchangeLike,
-  mexc: new ccxt.mexc({ timeout: 10000 }) as unknown as ExchangeLike,
-  kucoin: new ccxt.kucoin({ timeout: 10000 }) as unknown as ExchangeLike,
-  gate: new ccxt.gate({ timeout: 10000 }) as unknown as ExchangeLike,
-  bitget: new ccxt.bitget({ timeout: 10000 }) as unknown as ExchangeLike,
-  okx: new ccxt.okx({ timeout: 10000 }) as unknown as ExchangeLike,
-  htx: new ccxt.htx({ timeout: 10000 }) as unknown as ExchangeLike,
-  bitmart: new ccxt.bitmart({ timeout: 10000 }) as unknown as ExchangeLike,
-  digifinex: new ccxt.digifinex({ timeout: 10000 }) as unknown as ExchangeLike
-};
+function normalizeSymbol(value: string | null): MarketSymbol {
+  const normalized = (value || 'BTC/USDT').replace('/', '').replace('-', '').toUpperCase();
+  return normalized === 'ETHUSDT' ? 'ETHUSDT' : 'BTCUSDT';
+}
+
+function getSundayStartSeconds(): number {
+  const now = new Date();
+  const sunday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - now.getUTCDay(), 0, 0, 0, 0));
+  return Math.floor(sunday.getTime() / 1000);
+}
+
+function normalizeSince(value: string | null, minimum: number): number {
+  if (!value) return minimum;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? Math.max(parsed, minimum) : minimum;
+}
+
+function readClosePrice(candle: BinanceKline): number | null {
+  const value = Number(candle[4]);
+  return Number.isFinite(value) && value > 0 ? value : null;
+}
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const sinceParam = url.searchParams.get('since');
-    const symbol = url.searchParams.get('symbol') || 'BTC/USDT';
+    const symbol = normalizeSymbol(url.searchParams.get('symbol'));
+    const sundayTs = getSundayStartSeconds();
+    const sinceTs = normalizeSince(url.searchParams.get('since'), sundayTs);
+    const elapsedMinutes = Math.max(1, Math.floor((Date.now() / 1000 - sinceTs) / 60) + 120);
+    const limit = Math.min(elapsedMinutes, 1000);
+    const params = new URLSearchParams({
+      symbol,
+      interval: '1m',
+      startTime: String(sinceTs * 1000),
+      limit: String(limit)
+    });
 
-    const now = new Date();
-    const sunday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - now.getUTCDay(), 0, 0, 0, 0));
-    const sundayTs = Math.floor(sunday.getTime() / 1000);
-
-    const sinceTs = sinceParam ? Math.max(parseInt(sinceParam, 10), sundayTs) : null;
-
-    const limit = sinceTs
-      ? Math.min(Math.floor((Date.now() / 1000 - sinceTs) / 60) + 120, 2000)
-      : 2000;
-
-    const fetchSince = sinceTs ? sinceTs * 1000 : undefined;
-    const exchangeIds = Object.keys(exchanges);
-
-    const allResults = await Promise.allSettled(
-      exchangeIds.map(async (id) => {
-        try {
-          const ohlcv = await exchanges[id].fetchOHLCV(symbol, '1m', fetchSince, limit);
-          return ohlcv.map((k) => ({ t: Math.floor(k[0] / 1000), v: k[4] }));
-        } catch {
-          return [] as Array<{ t: number; v: number }>;
-        }
-      })
-    );
-
-    const priceGroups: Record<number, number[]> = {};
-
-    allResults.forEach((res) => {
-      if (res.status === 'fulfilled' && Array.isArray(res.value)) {
-        res.value.forEach((p) => {
-          if (p.t >= sundayTs) {
-            if (!priceGroups[p.t]) priceGroups[p.t] = [];
-            priceGroups[p.t].push(p.v);
-          }
-        });
+    const response = await fetch(`https://api.binance.com/api/v3/klines?${params.toString()}`, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/json'
       }
     });
 
-    const sortedTimestamps = Object.keys(priceGroups)
-      .map(Number)
-      .sort((a, b) => a - b);
+    if (!response.ok) {
+      throw new Error(`History source unreachable for ${symbol}`);
+    }
 
-    const history = sortedTimestamps.map((t) => {
-      const vals = priceGroups[t];
-      vals.sort((a, b) => a - b);
-      const mid = Math.floor(vals.length / 2);
-      return { time: t, value: vals.length % 2 !== 0 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2 };
-    });
+    const candles = (await response.json()) as BinanceKline[];
+    const history = candles
+      .map((candle) => {
+        const value = readClosePrice(candle);
+        return value ? { time: Math.floor(candle[0] / 1000), value } : null;
+      })
+      .filter((point): point is { time: number; value: number } => point !== null && point.time >= sundayTs);
 
     return NextResponse.json(
       {
         history,
-        source: 'ccxt_optimized_1m',
+        source: 'binance_1m',
         range_start: sundayTs,
-        sources_count: allResults.filter((r) => r.status === 'fulfilled' && r.value.length > 0).length,
+        sources_count: history.length > 0 ? 1 : 0,
         timestamp: Math.floor(Date.now() / 1000)
       },
       {

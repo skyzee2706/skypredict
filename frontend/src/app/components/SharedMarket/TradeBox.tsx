@@ -363,8 +363,15 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 
                             setIsPlacingBet(true);
                             try {
-                                const selectedLabel = selectedOutcome === 'YES' ? (market.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (market.drawName ?? 'Draw') : (market.sideBName ?? 'NO');
-                                await placeBet(market.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
+                                const freshMarket = await import('../../../lib/onchain/reads')
+                                    .then(({ fetchMarketInfo }) => fetchMarketInfo(market.contractId as `0x${string}`))
+                                    .catch((error) => {
+                                        console.warn('Fresh market reload before bet failed, using current market state:', error);
+                                        return market;
+                                    });
+                                const tradeMarket = freshMarket?.contractId ? freshMarket : market;
+                                const selectedLabel = selectedOutcome === 'YES' ? (tradeMarket.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (tradeMarket.drawName ?? 'Draw') : (tradeMarket.sideBName ?? 'NO');
+                                await placeBet(tradeMarket.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
                                 showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
                                 await fetchTokenBalance();
                                 window.dispatchEvent(new Event('skyusd:balance-refresh'));

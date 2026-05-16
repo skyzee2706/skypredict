@@ -56,6 +56,13 @@ function formatVol(v: number): string {
 
 const LandingView: React.FC = () => {
     const router = useRouter();
+    const hardNavigate = React.useCallback((path: string) => {
+        if (typeof window !== 'undefined' && window.location.pathname !== path) {
+            window.location.assign(path);
+            return;
+        }
+        router.push(path);
+    }, [router]);
 
     const { addresses } = useFactoryMarkets();
     const { markets: batchedMarkets } = useBatchedMarkets(addresses);
@@ -84,7 +91,7 @@ const LandingView: React.FC = () => {
             <div
                 key={market.id}
                 className={styles.trendingCard}
-                onClick={() => router.push(`/markets/${market.contractId}`)}
+                onClick={() => hardNavigate(`/markets/${market.contractId}`)}
             >
                 <div className={styles.trendingCardTop}>
                     <span className={`${styles.trendingBadge} ${isSport ? styles.trendingBadgeSport : styles.trendingBadgeCrypto}`}>
@@ -128,11 +135,11 @@ const LandingView: React.FC = () => {
                 </div>
 
                 <div className={styles.heroActions}>
-                    <button className={styles.ctaPrimary} onClick={() => router.push('/markets')}>
+                    <button className={styles.ctaPrimary} onClick={() => hardNavigate('/markets')}>
                         Explore Markets
                         <IconArrowRight />
                     </button>
-                    <button className={styles.ctaSecondary} onClick={() => router.push('/faucet')}>
+                    <button className={styles.ctaSecondary} onClick={() => hardNavigate('/faucet')}>
                         Get SkyUSD Tokens
                     </button>
                 </div>
@@ -241,7 +248,7 @@ const LandingView: React.FC = () => {
                 )}
 
                 <div className={styles.trendingCta}>
-                    <button className={styles.ctaPrimary} onClick={() => router.push('/markets')}>
+                    <button className={styles.ctaPrimary} onClick={() => hardNavigate('/markets')}>
                         View All Markets
                         <IconArrowRight />
                     </button>

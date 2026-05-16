@@ -1,44 +1,89 @@
-﻿import { NextResponse } from 'next/server';
-import ccxt from 'ccxt';
+import { NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-type ExchangeLike = {
-  fetchTicker: (symbol: string) => Promise<{ last?: number | null }>;
+type PriceSource = {
+  id: string;
+  url: string;
+  readPrice: (data: unknown) => number | null;
 };
 
-const exchanges: Record<string, ExchangeLike> = {
-  binance: new ccxt.binance({ timeout: 5000 }) as unknown as ExchangeLike,
-  bybit: new ccxt.bybit({ timeout: 5000 }) as unknown as ExchangeLike,
-  mexc: new ccxt.mexc({ timeout: 5000 }) as unknown as ExchangeLike,
-  kucoin: new ccxt.kucoin({ timeout: 5000 }) as unknown as ExchangeLike,
-  gate: new ccxt.gate({ timeout: 5000 }) as unknown as ExchangeLike,
-  bitget: new ccxt.bitget({ timeout: 5000 }) as unknown as ExchangeLike,
-  okx: new ccxt.okx({ timeout: 5000 }) as unknown as ExchangeLike,
-  htx: new ccxt.htx({ timeout: 5000 }) as unknown as ExchangeLike,
-  bitmart: new ccxt.bitmart({ timeout: 5000 }) as unknown as ExchangeLike,
-  digifinex: new ccxt.digifinex({ timeout: 5000 }) as unknown as ExchangeLike
-};
+const priceSources: PriceSource[] = [
+  {
+    id: 'binance',
+    url: 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
+    readPrice: (data) => readNumericPath(data, ['price'])
+  },
+  {
+    id: 'bybit',
+    url: 'https://api.bybit.com/v5/market/tickers?category=spot&symbol=BTCUSDT',
+    readPrice: (data) => readNumericPath(data, ['result', 'list', 0, 'lastPrice'])
+  },
+  {
+    id: 'okx',
+    url: 'https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT',
+    readPrice: (data) => readNumericPath(data, ['data', 0, 'last'])
+  },
+  {
+    id: 'kucoin',
+    url: 'https://api.kucoin.com/api/v1/market/orderbook/level1?symbol=BTC-USDT',
+    readPrice: (data) => readNumericPath(data, ['data', 'price'])
+  },
+  {
+    id: 'mexc',
+    url: 'https://api.mexc.com/api/v3/ticker/price?symbol=BTCUSDT',
+    readPrice: (data) => readNumericPath(data, ['price'])
+  }
+];
+
+function readNumericPath(data: unknown, path: Array<string | number>): number | null {
+  let current: unknown = data;
+
+  for (const key of path) {
+    if (typeof key === 'number') {
+      if (!Array.isArray(current)) return null;
+      current = current[key];
+      continue;
+    }
+
+    if (!current || typeof current !== 'object' || !(key in current)) return null;
+    current = (current as Record<string, unknown>)[key];
+  }
+
+  const value = typeof current === 'number' ? current : Number(current);
+  return Number.isFinite(value) && value > 10000 ? value : null;
+}
+
+async function fetchPrice(source: PriceSource): Promise<number | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(source.url, {
+      cache: 'no-store',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json'
+      }
+    });
+
+    if (!response.ok) return null;
+    return source.readPrice(await response.json());
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export async function GET() {
   try {
-    const exchangeIds = Object.keys(exchanges);
-
-    const results = await Promise.allSettled(
-      exchangeIds.map(async (id) => {
-        try {
-          const ticker = await exchanges[id].fetchTicker('BTC/USDT');
-          return typeof ticker?.last === 'number' ? ticker.last : null;
-        } catch {
-          return null;
-        }
-      })
-    );
-
+    const results = await Promise.allSettled(priceSources.map(fetchPrice));
     const prices = results
-      .filter((r): r is PromiseFulfilledResult<number | null> => r.status === 'fulfilled')
-      .map((r) => r.value)
-      .filter((p): p is number => p !== null && p > 10000);
+      .filter((result): result is PromiseFulfilledResult<number | null> => result.status === 'fulfilled')
+      .map((result) => result.value)
+      .filter((price): price is number => price !== null);
 
     if (prices.length === 0) {
       throw new Error('Price sources unreachable');
