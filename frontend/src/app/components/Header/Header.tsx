@@ -1,8 +1,6 @@
 import React from 'react';
-import Image from 'next/image';
 import styles from './Header.module.css';
 import { useWallet } from '../../providers/WalletProvider';
-import { useToast } from '../../providers/ToastProvider';
 import { readContract } from 'wagmi/actions';
 import { wagmiConfig } from '../../../lib/onchain/wagmiConfig';
 import { seismicTestnet } from '../../../lib/onchain/seismicChain';
@@ -19,7 +17,6 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     const { isConnected, walletAddress, isConnecting, connect, disconnect } = useWallet();
-    const { showToast } = useToast();
     const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
     const [walletDropdownOpen, setWalletDropdownOpen] = React.useState(false);
     const [balanceDropdownOpen, setBalanceDropdownOpen] = React.useState(false);

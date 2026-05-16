@@ -7,6 +7,8 @@ interface PricePoint {
     value: number;
 }
 
+type BinanceKline = [number, string, string, string, string, ...unknown[]];
+
 interface PriceChartProps {
     symbol?: string; // e.g. "BTCUSDT" or "ETHUSDT"
     height?: number;
@@ -20,6 +22,7 @@ interface PriceChartProps {
 const LS_KEY_PREFIX = 'rt_cache_';
 const LS_MAX_HOURS = 2;
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars -- kept for localStorage cache compatibility when live capture is re-enabled
 function loadStoredPrices(symbol: string): PricePoint[] {
     try {
         if (typeof window === 'undefined') return [];
@@ -55,7 +58,7 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
     useEffect(() => {
         if (!containerRef.current) return;
         const observer = new ResizeObserver((entries) => {
-            for (let entry of entries) {
+            for (const entry of entries) {
                 setWidth(entry.contentRect.width);
             }
         });
@@ -75,8 +78,8 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
                 const currentNow = Math.floor(Date.now() / 1000);
 
                 const filtered = raw
-                    .filter((p: any) => p.time >= (startTime - 3600) && p.time <= Math.min(endTime, currentNow + 60))
-                    .sort((a: any, b: any) => a.time - b.time);
+                    .filter((p: PricePoint) => p.time >= (startTime - 3600) && p.time <= Math.min(endTime, currentNow + 60))
+                    .sort((a: PricePoint, b: PricePoint) => a.time - b.time);
 
                 if (isMounted) setHistory(filtered);
             } catch (err) {
@@ -97,7 +100,7 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
                     const data = await res.json();
                     if (data.price > 0) setLivePrice(data.price);
                 }
-            } catch (k) { }
+            } catch { }
         }
         fetchLive();
         const t = setInterval(fetchLive, 2000);
@@ -118,7 +121,7 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
                     { cache: 'no-store' }
                 );
                 if (!res.ok) return;
-                const raw: any[][] = await res.json();
+                const raw: BinanceKline[] = await res.json();
                 const candles: PricePoint[] = raw.map(k => ({
                     time: Math.floor(k[0] / 1000),
                     value: parseFloat(k[4]), // close price
@@ -176,7 +179,7 @@ export function PriceChart({ symbol = "BTCUSDT", height = 480, startTime, endTim
     const scale = useMemo(() => {
         if (!startTime || !endTime || !width || !strikePrice) return null;
 
-        let prices = allPoints.map(p => p.value);
+        const prices = allPoints.map(p => p.value);
         const midP = strikePrice;
 
         const maxDelta = prices.length > 0 ? Math.max(...prices.map(p => Math.abs(p - midP))) : midP * 0.01;

@@ -8,12 +8,13 @@ function TradingViewWidget({ symbol }: TradingViewWidgetProps) {
     const container = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
-        if (!container.current) return;
+        const currentContainer = container.current;
+        if (!currentContainer) return;
 
         let isCancelled = false;
 
         // Clear previous usage to prevent duplicates if symbol changes or remount
-        container.current.innerHTML = '';
+        currentContainer.innerHTML = '';
 
         // Create the widget container div that TradingView expects
         const widgetContainer = document.createElement("div");
@@ -21,11 +22,11 @@ function TradingViewWidget({ symbol }: TradingViewWidgetProps) {
 
         // Add some safety attributes
         widgetContainer.id = `tv-widget-${Math.random().toString(36).slice(2, 11)}`;
-        container.current.appendChild(widgetContainer);
+        currentContainer.appendChild(widgetContainer);
 
         // Add a small delay to ensure DOM is ready
         setTimeout(() => {
-            if (isCancelled || !container.current) return;
+            if (isCancelled) return;
 
             const script = document.createElement("script");
             script.src = "https://s3.tradingview.com/external-embedding/embed-widget-mini-symbol-overview.js";
@@ -48,15 +49,13 @@ function TradingViewWidget({ symbol }: TradingViewWidgetProps) {
                 console.warn('TradingView widget failed to load');
             };
 
-            container.current.appendChild(script);
+            currentContainer.appendChild(script);
         }, 100);
 
         // Cleanup function to prevent memory leaks
         return () => {
             isCancelled = true;
-            if (container.current) {
-                container.current.innerHTML = '';
-            }
+            currentContainer.innerHTML = '';
         };
 
     }, [symbol]);

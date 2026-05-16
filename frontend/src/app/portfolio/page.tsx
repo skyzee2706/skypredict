@@ -42,7 +42,7 @@ type CachedPortfolioResponse = {
     source?: string;
 };
 
-const DATABASE_FALLBACK_TIMEOUT_MS = 60_000;
+const DATABASE_FALLBACK_TIMEOUT_MS = 6_000;
 
 type PortfolioPosition = {
     market: MarketData;
@@ -96,6 +96,10 @@ export default function PortfolioPage() {
         [batchedPositions, hasDatabasePortfolio, liveAddresses]
     );
     const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching, isFetched: marketsFetched } = useBatchedMarkets(positionMarketAddresses, { refetchInterval: portfolioRefetchInterval, enabled: hasDatabasePortfolio || shouldUseChainFallback });
+    void positionsLoading;
+    void positionsFetching;
+    void marketsLoading;
+    void marketsFetching;
 
     const dbPositions = useMemo<PortfolioPosition[]>(() => {
         const indexedPositions = cachedPortfolio?.positions ?? [];
@@ -184,7 +188,6 @@ export default function PortfolioPage() {
         setAllowChainFallback(false);
         const controller = new AbortController();
         const timeout = window.setTimeout(() => {
-            setAllowChainFallback(true);
             controller.abort();
         }, DATABASE_FALLBACK_TIMEOUT_MS);
 
@@ -193,23 +196,21 @@ export default function PortfolioPage() {
             .then((data: CachedPortfolioResponse | null) => {
                 if (cancelled) return;
                 window.clearTimeout(timeout);
-                if (data?.marketAddresses?.length) {
+                if (data?.marketAddresses?.length || data?.activity?.length || data?.positions?.length) {
                     setCachedPortfolio(data);
-                    setAllowChainFallback(false);
-                } else {
-                    setAllowChainFallback(true);
                 }
+                setAllowChainFallback(false);
                 setPortfolioCacheLoading(false);
             })
             .catch((error) => {
                 if (cancelled) return;
                 if (error instanceof DOMException && error.name === 'AbortError') {
-                    console.warn("Portfolio database timed out after 60s, falling back to chain scan.");
+                    console.warn("Portfolio database timed out, keeping the page responsive without automatic chain scan.");
                 } else {
-                    console.warn("Portfolio cache unavailable, falling back to chain scan:", error);
+                    console.warn("Portfolio cache unavailable:", error);
                     window.clearTimeout(timeout);
                 }
-                setAllowChainFallback(true);
+                setAllowChainFallback(false);
                 setPortfolioCacheLoading(false);
             });
 
@@ -271,9 +272,11 @@ export default function PortfolioPage() {
     }, [address, batchedMarkets, batchedPositions]);
 
     const loadPortfolio = React.useCallback(async () => {
-        // Wagmi hooks refetch in the background automatically; this keeps the
-        // button API stable without reintroducing direct per-market RPC loops.
-    }, []);
+        // Keep normal navigation lightweight. Only run the heavier on-chain scan
+        // when the user explicitly asks for a refresh.
+        if (!hasWalletAddress) return;
+        setAllowChainFallback(true);
+    }, [hasWalletAddress]);
 
     const hasLoadedFactory = hasDatabasePortfolio || !shouldUseChainFallback || factoryFetched;
     const hasDbPositions = dbPositions.length > 0;

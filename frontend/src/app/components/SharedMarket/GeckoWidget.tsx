@@ -15,7 +15,8 @@ const GeckoWidget: React.FC<GeckoWidgetProps> = ({ coinId, mini = false }) => {
     const [isMounted, setIsMounted] = React.useState(false);
 
     useEffect(() => {
-        setIsMounted(true);
+        const frame = requestAnimationFrame(() => setIsMounted(true));
+        return () => cancelAnimationFrame(frame);
     }, []);
 
     if (!isMounted) return <div style={{ width: '100%', height: '100%' }} />; // Return placeholder to prevent layout shift

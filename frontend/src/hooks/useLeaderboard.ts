@@ -42,13 +42,18 @@ export function useLeaderboard() {
     const [updatedAt, setUpdatedAt] = useState<number | null>(null);
     const [lastProcessedBlock, setLastProcessedBlock] = useState<string | null>(null);
     const requestSeq = useRef(0);
+    const entriesLengthRef = useRef(0);
+
+    useEffect(() => {
+        entriesLengthRef.current = entries.length;
+    }, [entries.length]);
 
     useEffect(() => {
         let cancelled = false;
 
         async function fetchLeaderboard() {
             try {
-                setIsLoading((current) => current && entries.length === 0);
+                setIsLoading((current) => current && entriesLengthRef.current === 0);
                 setError(null);
 
                 const currentSeq = ++requestSeq.current;

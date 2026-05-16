@@ -35,8 +35,9 @@ export async function GET(request: NextRequest) {
 
         const data = await response.json();
         return NextResponse.json(data);
-    } catch (error: any) {
-        console.error('Proxy Error:', error.message);
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error('Proxy Error:', message);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

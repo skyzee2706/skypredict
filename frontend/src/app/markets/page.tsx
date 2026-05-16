@@ -21,13 +21,10 @@ export default function MarketsPage() {
     const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
     const { addresses, error: factoryError } = useFactoryMarkets();
     const { markets: batchedMarkets, isLoading: isBatchLoading, error: batchError } = useBatchedMarkets(addresses);
-    const [allMarkets, setAllMarkets] = useState<MarketData[]>([]);
-
-    useEffect(() => {
-        if (batchedMarkets.length > 0) {
-            setAllMarkets(batchedMarkets);
-        }
-    }, [batchedMarkets]);
+    const allMarkets = React.useMemo(
+        () => (batchedMarkets.length > 0 ? batchedMarkets : []),
+        [batchedMarkets]
+    );
 
     useEffect(() => {
         const id = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);

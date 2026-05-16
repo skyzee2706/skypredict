@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { MarketData } from '../../../data/markets';
 import { useBatchedMarkets, useFactoryMarkets } from '../../../hooks/useMarketBatches';
@@ -270,9 +271,9 @@ const LandingView: React.FC = () => {
                     <div className={styles.footerLinksGroup}>
                         <div className={styles.footerLinkCol}>
                             <div className={styles.footerColTitle}>Product</div>
-                            <a href="/markets" className={styles.footerLink}>Markets</a>
-                            <a href="/faucet" className={styles.footerLink}>Faucet</a>
-                            <a href="/portfolio" className={styles.footerLink}>Portfolio</a>
+                            <Link href="/markets" className={styles.footerLink}>Markets</Link>
+                            <Link href="/faucet" className={styles.footerLink}>Faucet</Link>
+                            <Link href="/portfolio" className={styles.footerLink}>Portfolio</Link>
                         </div>
                         <div className={styles.footerLinkCol}>
                             <div className={styles.footerColTitle}>Resources</div>

@@ -46,6 +46,7 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
     const identifier = market?.identifier || legacyIdentifier;
     const description = market?.description || legacyDescription;
     const resolutionRule = market?.resolutionRule || legacyResolutionRule;
+    void resolutionRule;
     const volume = market?.volume || legacyVolume;
 
     const { isConnected, walletAddress } = useWallet();

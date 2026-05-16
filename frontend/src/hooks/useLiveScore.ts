@@ -10,6 +10,24 @@ export interface SportLiveScore {
     utcDate: string;
 }
 
+interface FootballTeam {
+    name?: string;
+    shortName?: string;
+}
+
+interface FootballMatch {
+    homeTeam?: FootballTeam;
+    awayTeam?: FootballTeam;
+    score?: {
+        fullTime?: {
+            home?: number | null;
+            away?: number | null;
+        };
+    };
+    status: string;
+    utcDate: string;
+}
+
 const normalizeTeamName = (name: string) =>
     name
         .toLowerCase()
@@ -30,7 +48,7 @@ const toDateOnly = (input?: string | number) => {
     return date.toISOString().slice(0, 10);
 };
 
-const getElapsedMinutes = (match: any): string | null => {
+const getElapsedMinutes = (match: FootballMatch): string | null => {
     if (match.status === 'PAUSED') return 'HT';
     if (match.status === 'FINISHED') return 'FT';
     if (match.status === 'TIMED' || match.status === 'SCHEDULED') return 'Not Started';
@@ -68,12 +86,12 @@ export function useLiveScore(homeTeam: string | undefined, awayTeam: string | un
                 if (!response.ok) throw new Error('Failed to fetch');
                 const data = await response.json();
 
-                const matches = Array.isArray(data.matches) ? data.matches : [];
-                const match = matches.find((m: any) => {
+                const matches: FootballMatch[] = Array.isArray(data.matches) ? data.matches : [];
+                const match = matches.find((m) => {
                     const apiHome = m.homeTeam?.name || m.homeTeam?.shortName || '';
                     const apiAway = m.awayTeam?.name || m.awayTeam?.shortName || '';
                     return teamMatches(homeTeam, apiHome) && teamMatches(awayTeam, apiAway);
-                }) || matches.find((m: any) => {
+                }) || matches.find((m) => {
                     const apiHome = m.homeTeam?.name || m.homeTeam?.shortName || '';
                     const apiAway = m.awayTeam?.name || m.awayTeam?.shortName || '';
                     return teamMatches(homeTeam, apiHome) || teamMatches(awayTeam, apiAway);

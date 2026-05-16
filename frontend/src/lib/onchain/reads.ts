@@ -17,6 +17,7 @@ function isFactoryConfigured() {
 }
 
 function computeState(resolved: boolean, bettingEndTime: number, _endTime: number): MarketState {
+  void _endTime;
   if (resolved) return 'RESOLVED';
   const now = Math.floor(Date.now() / 1000);
   if (now < bettingEndTime) return 'ACTIVE';

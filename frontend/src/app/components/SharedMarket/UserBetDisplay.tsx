@@ -23,6 +23,7 @@ interface UserBetData {
 }
 
 const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full' }) => {
+    void variant;
     const { isConnected, walletAddress } = useWallet();
     const { showToast } = useToast();
     const [betData, setBetData] = React.useState<UserBetData | null>(null);
@@ -63,11 +64,12 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
             await claimRewards(market.contractId as `0x${string}`);
             showToast('Rewards claimed successfully!', 'success');
             await fetchUserBetData(); // Refresh data
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error('Failed to claim rewards:', error);
 
-            const errorMessage = error?.message?.toLowerCase() || '';
-            const errorCode = error?.code;
+            const errorLike = error as { message?: string; code?: string | number };
+            const errorMessage = errorLike.message?.toLowerCase() || '';
+            const errorCode = errorLike.code;
 
             if (
                 errorCode === 4001 ||
@@ -119,7 +121,7 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
                     <h3 className={styles.title}>Your Position</h3>
                 </div>
                 <div className={styles.noBets}>
-                    You haven't placed any bets on this market yet.
+                    You haven&apos;t placed any bets on this market yet.
                 </div>
             </div>
         );

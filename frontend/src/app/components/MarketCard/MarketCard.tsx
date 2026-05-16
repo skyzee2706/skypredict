@@ -1,6 +1,5 @@
 import React from 'react';
 import styles from './MarketCard.module.css';
-import { PriceChart } from '../SharedMarket/PriceChart';
 import ProbabilityGauge from '../SharedMarket/ProbabilityGauge';
 import { MarketData, getUserMarketStatus, UserMarketStatus } from '../../../data/markets';
 import { claimRewards } from '../../../lib/onchain/writes';
@@ -58,6 +57,9 @@ const MarketCard: React.FC<MarketCardProps> = ({
     const volume = market?.volume || legacyVolume || 0;
     const type = market?.type || legacyType || 'crypto';
     const identifier = market?.identifier || legacyIdentifier;
+    void trend;
+    void type;
+    void identifier;
 
     const { isConnected, walletAddress } = useWallet();
     const { showToast } = useToast();

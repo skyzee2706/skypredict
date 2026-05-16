@@ -193,7 +193,7 @@ export async function refreshIndexerCache(client: PublicClient) {
 
     const latestBlock = await client.getBlockNumber();
     const cachedLast = BigInt(cache.lastProcessedBlock || '0');
-    let fromBlock = cachedLast > 0n ? cachedLast + 1n : LEADERBOARD_START_BLOCK;
+    const fromBlock = cachedLast > 0n ? cachedLast + 1n : LEADERBOARD_START_BLOCK;
 
     if (fromBlock > latestBlock) {
         cache.updatedAt = Date.now();

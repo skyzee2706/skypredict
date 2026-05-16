@@ -123,6 +123,8 @@ export async function resolveBet(marketAddress: `0x${string}`) {
 }
 
 export async function setCreatorApproval(_creator: `0x${string}`, _approved: boolean) {
+  void _creator;
+  void _approved;
   // MarketFactory does not support creator approval gating.
   return;
 }

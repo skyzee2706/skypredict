@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import styles from './TradeBox.module.css';
 import { MarketData, getUserMarketStatus, UserMarketStatus } from '../../../data/markets';
-import { claimRewards, placeBet, checkUsdlBalance, isRouterApproved, approveRouter } from '../../../lib/onchain/writes';
+import { claimRewards, placeBet, isRouterApproved, approveRouter } from '../../../lib/onchain/writes';
 import { useWallet } from '../../providers/WalletProvider';
 import { useToast } from '../../providers/ToastProvider';
 import ConnectWalletPrompt from '../Wallet/ConnectWalletPrompt';
