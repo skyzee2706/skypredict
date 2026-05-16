@@ -17,15 +17,27 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     const { isConnected, walletAddress, isConnecting, connect, disconnect } = useWallet();
-    const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
+    const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(() => {
+        if (typeof window === 'undefined') return undefined;
+        const cached = window.localStorage.getItem('skyusd:lastBalance');
+        try {
+            return cached ? BigInt(cached) : undefined;
+        } catch {
+            return undefined;
+        }
+    });
+    const [displayWalletAddress, setDisplayWalletAddress] = React.useState<string | null>(() => {
+        if (typeof window === 'undefined') return null;
+        return window.localStorage.getItem('skyusd:lastWallet');
+    });
     const [walletDropdownOpen, setWalletDropdownOpen] = React.useState(false);
     const [balanceDropdownOpen, setBalanceDropdownOpen] = React.useState(false);
     const [theme, setTheme] = React.useState<'light' | 'dark'>('dark');
     const walletRef = React.useRef<HTMLDivElement>(null);
     const balanceRef = React.useRef<HTMLDivElement>(null);
 
-    const shortAddress = walletAddress
-        ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+    const shortAddress = displayWalletAddress
+        ? `${displayWalletAddress.slice(0, 6)}...${displayWalletAddress.slice(-4)}`
         : '';
 
     React.useEffect(() => {
@@ -33,6 +45,21 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         const currentTheme = root.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
         setTheme(currentTheme);
     }, []);
+
+    React.useEffect(() => {
+        if (walletAddress) {
+            setDisplayWalletAddress(walletAddress);
+            window.localStorage.setItem('skyusd:lastWallet', walletAddress);
+            return;
+        }
+
+        if (!isConnecting && !isConnected) {
+            setDisplayWalletAddress(null);
+            setTokenBalance(undefined);
+            window.localStorage.removeItem('skyusd:lastWallet');
+            window.localStorage.removeItem('skyusd:lastBalance');
+        }
+    }, [walletAddress, isConnecting, isConnected]);
 
     const toggleTheme = React.useCallback(() => {
         const nextTheme = theme === 'dark' ? 'light' : 'dark';
@@ -43,7 +70,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
 
     const fetchTokenBalance = React.useCallback(async () => {
         if (!walletAddress || !isConnected) {
-            setTokenBalance(undefined);
+            if (!isConnecting) {
+                setTokenBalance(undefined);
+                window.localStorage.removeItem('skyusd:lastBalance');
+            }
             return;
         }
 
@@ -56,15 +86,21 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 args: [walletAddress as `0x${string}`]
             });
             setTokenBalance(balance);
+            window.localStorage.setItem('skyusd:lastBalance', balance.toString());
         } catch (error) {
             console.error('Failed to fetch token balance:', error);
-            setTokenBalance(undefined);
         }
-    }, [walletAddress, isConnected]);
+    }, [walletAddress, isConnected, isConnecting]);
 
     React.useEffect(() => {
         fetchTokenBalance();
     }, [fetchTokenBalance]);
+
+    React.useEffect(() => {
+        if (!walletAddress || !isConnected) return;
+        const interval = window.setInterval(fetchTokenBalance, 5000);
+        return () => window.clearInterval(interval);
+    }, [fetchTokenBalance, walletAddress, isConnected]);
 
     React.useEffect(() => {
         const handleRefresh = () => {
@@ -162,7 +198,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 <button className={styles.themeToggle} onClick={toggleTheme} aria-label="Toggle theme">
                     {theme === 'dark' ? 'Dark' : 'Light'}
                 </button>
-                {isConnected && tokenBalance !== undefined && (
+                {displayWalletAddress && tokenBalance !== undefined && (
                     <div ref={balanceRef} style={{ position: 'relative', marginRight: '16px' }}>
                         <div className={styles.dropdownTrigger} onClick={handleBalanceClick}>
                             {(Number(tokenBalance) / SKYUSD_MULTIPLIER).toFixed(2)} {TOKEN_SYMBOL}
@@ -191,7 +227,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                         )}
                     </div>
                 )}
-                {isConnected ? (
+                {displayWalletAddress ? (
                     <div ref={walletRef} style={{ position: 'relative' }}>
                         <button className={styles.walletButton} onClick={handleWalletClick}>
                             {shortAddress}
