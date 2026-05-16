@@ -17,19 +17,8 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     const { isConnected, walletAddress, isConnecting, connect, disconnect } = useWallet();
-    const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(() => {
-        if (typeof window === 'undefined') return undefined;
-        const cached = window.localStorage.getItem('skyusd:lastBalance');
-        try {
-            return cached ? BigInt(cached) : undefined;
-        } catch {
-            return undefined;
-        }
-    });
-    const [displayWalletAddress, setDisplayWalletAddress] = React.useState<string | null>(() => {
-        if (typeof window === 'undefined') return null;
-        return window.localStorage.getItem('skyusd:lastWallet');
-    });
+    const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
+    const [displayWalletAddress, setDisplayWalletAddress] = React.useState<string | null>(null);
     const [walletDropdownOpen, setWalletDropdownOpen] = React.useState(false);
     const [balanceDropdownOpen, setBalanceDropdownOpen] = React.useState(false);
     const [theme, setTheme] = React.useState<'light' | 'dark'>('dark');
@@ -49,15 +38,12 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     React.useEffect(() => {
         if (walletAddress) {
             setDisplayWalletAddress(walletAddress);
-            window.localStorage.setItem('skyusd:lastWallet', walletAddress);
             return;
         }
 
         if (!isConnecting && !isConnected) {
             setDisplayWalletAddress(null);
             setTokenBalance(undefined);
-            window.localStorage.removeItem('skyusd:lastWallet');
-            window.localStorage.removeItem('skyusd:lastBalance');
         }
     }, [walletAddress, isConnecting, isConnected]);
 
@@ -72,7 +58,6 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         if (!walletAddress || !isConnected) {
             if (!isConnecting) {
                 setTokenBalance(undefined);
-                window.localStorage.removeItem('skyusd:lastBalance');
             }
             return;
         }
@@ -86,7 +71,6 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 args: [walletAddress as `0x${string}`]
             });
             setTokenBalance(balance);
-            window.localStorage.setItem('skyusd:lastBalance', balance.toString());
         } catch (error) {
             console.error('Failed to fetch token balance:', error);
         }
@@ -198,7 +182,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 <button className={styles.themeToggle} onClick={toggleTheme} aria-label="Toggle theme">
                     {theme === 'dark' ? 'Dark' : 'Light'}
                 </button>
-                {displayWalletAddress && tokenBalance !== undefined && (
+                {isConnected && displayWalletAddress && tokenBalance !== undefined && (
                     <div ref={balanceRef} style={{ position: 'relative', marginRight: '16px' }}>
                         <div className={styles.dropdownTrigger} onClick={handleBalanceClick}>
                             {(Number(tokenBalance) / SKYUSD_MULTIPLIER).toFixed(2)} {TOKEN_SYMBOL}
@@ -227,7 +211,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                         )}
                     </div>
                 )}
-                {displayWalletAddress ? (
+                {isConnected && displayWalletAddress ? (
                     <div ref={walletRef} style={{ position: 'relative' }}>
                         <button className={styles.walletButton} onClick={handleWalletClick}>
                             {shortAddress}
