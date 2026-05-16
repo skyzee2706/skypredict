@@ -108,22 +108,30 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
     }, [disconnect]);
 
     const navigate = React.useCallback((page: HeaderProps['currentPage']) => {
-        // Production fix: Portfolio depends on wallet/indexer state that can be
-        // stale after Next.js soft navigation from Markets/Leaderboard. Landing
-        // already uses document navigation and works, so mirror that behavior
-        // specifically for Portfolio from non-landing pages.
+        const targetPathByPage: Record<HeaderProps['currentPage'], string> = {
+            landing: '/',
+            markets: '/markets',
+            portfolio: '/portfolio',
+            leaderboard: '/leaderboard',
+            faucet: '/faucet',
+        };
+        const targetPath = targetPathByPage[page];
+        const needsFreshWalletBoot = page === 'portfolio' || page === 'faucet' || page === 'markets';
+
+        // Production fix: transaction-sensitive pages need a fresh Privy/Wagmi
+        // boot after cross-page navigation. This mirrors pressing F5, which is
+        // known to make deposit and bet transactions work reliably.
         if (
-            page === 'portfolio' &&
-            currentPage !== 'landing' &&
+            needsFreshWalletBoot &&
             typeof window !== 'undefined' &&
-            window.location.pathname !== '/portfolio'
+            window.location.pathname !== targetPath
         ) {
-            window.location.assign('/portfolio');
+            window.location.assign(targetPath);
             return;
         }
 
         onNavigate(page);
-    }, [currentPage, onNavigate]);
+    }, [onNavigate]);
 
     const handleDeposit = React.useCallback(() => {
         navigate('faucet');
