@@ -87,10 +87,28 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         setWalletDropdownOpen(false);
     }, [disconnect]);
 
+    const navigate = React.useCallback((page: HeaderProps['currentPage']) => {
+        // Production fix: Portfolio depends on wallet/indexer state that can be
+        // stale after Next.js soft navigation from Markets/Leaderboard. Landing
+        // already uses document navigation and works, so mirror that behavior
+        // specifically for Portfolio from non-landing pages.
+        if (
+            page === 'portfolio' &&
+            currentPage !== 'landing' &&
+            typeof window !== 'undefined' &&
+            window.location.pathname !== '/portfolio'
+        ) {
+            window.location.assign('/portfolio');
+            return;
+        }
+
+        onNavigate(page);
+    }, [currentPage, onNavigate]);
+
     const handleDeposit = React.useCallback(() => {
-        onNavigate('faucet');
+        navigate('faucet');
         setBalanceDropdownOpen(false);
-    }, [onNavigate]);
+    }, [navigate]);
 
     React.useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -111,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
             <div className={styles.left}>
                 <div
                     className={styles.logo}
-                    onClick={() => onNavigate('landing')}
+                    onClick={() => navigate('landing')}
                     style={{ cursor: 'pointer' }}
                 >
                     <div className={styles.logoMark} />
@@ -122,19 +140,19 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
                 <nav className={styles.nav}>
                     <span
                         className={`${styles.navItem} ${currentPage === 'markets' ? styles.active : ''}`}
-                        onClick={() => onNavigate('markets')}
+                        onClick={() => navigate('markets')}
                     >
                         Markets
                     </span>
                     <span
                         className={`${styles.navItem} ${currentPage === 'portfolio' ? styles.active : ''}`}
-                        onClick={() => onNavigate('portfolio')}
+                        onClick={() => navigate('portfolio')}
                     >
                         Portfolio
                     </span>
                     <span
                         className={`${styles.navItem} ${currentPage === 'leaderboard' ? styles.active : ''}`}
-                        onClick={() => onNavigate('leaderboard')}
+                        onClick={() => navigate('leaderboard')}
                     >
                         Leaderboard
                     </span>
