@@ -100,8 +100,8 @@ export function useLiveScore(homeTeam: string | undefined, awayTeam: string | un
                 if (!cancelled) {
                     if (match) {
                         setLiveScore({
-                            homeTeam: match.homeTeam.shortName || match.homeTeam.name,
-                            awayTeam: match.awayTeam.shortName || match.awayTeam.name,
+                            homeTeam: match.homeTeam?.shortName || match.homeTeam?.name || homeTeam,
+                            awayTeam: match.awayTeam?.shortName || match.awayTeam?.name || awayTeam,
                             homeGoals: match.score?.fullTime?.home ?? null,
                             awayGoals: match.score?.fullTime?.away ?? null,
                             status: match.status,
