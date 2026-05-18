@@ -4,10 +4,12 @@ import React from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Header from '../../components/Header/Header';
 import MarketFullPage from '../../components/MarketExpanded/MarketFullPage';
-import { MarketData, MarketState } from '../../../data/markets';
-import { fetchMarketInfo, fetchMarketsByStatus } from '../../../lib/onchain/reads';
-import { isLegitBet } from '../../../lib/onchain/writes';
+import { MarketData } from '../../../data/markets';
 import styles from '../../page.module.css';
+
+type IndexedMarketsResponse = {
+    markets?: MarketData[];
+};
 
 // src/app/markets/[id]/page.tsx
 // ../ -> src/app/markets
@@ -32,44 +34,27 @@ export default function MarketPage() {
             setIsInvalidBet(false);
             try {
                 const target = (id || '').toLowerCase();
-                const isAddress = /^0x[a-fA-F0-9]{40}$/.test(target);
+                const response = await fetch(`/api/markets?t=${Date.now()}`, { cache: 'no-store' });
+                if (!response.ok) throw new Error(`Market API failed: ${response.status}`);
 
-                if (isAddress) {
-                    const address = target as `0x${string}`;
-                    const [marketInfo, validBet] = await Promise.all([
-                        fetchMarketInfo(address),
-                        isLegitBet(address).catch((error) => {
-                            console.error('Error validating bet legitimacy:', error);
-                            return true;
-                        })
-                    ]);
+                const payload = (await response.json()) as IndexedMarketsResponse;
+                const markets = Array.isArray(payload.markets) ? payload.markets : [];
+                const found = markets.find((m) => {
+                    const cid = (m.contractId || '').toLowerCase();
+                    const mid = (m.id ? String(m.id) : '').toLowerCase();
+                    return cid === target || mid === target;
+                }) || null;
 
-                    if (!cancelled) {
-                        if (!validBet || !marketInfo?.title) {
-                            setIsInvalidBet(true);
-                            setMarket(null);
-                        } else {
-                            setMarket(marketInfo);
-                        }
-                    }
-                    return;
+                if (!cancelled) {
+                    setMarket(found);
+                    setIsInvalidBet(!found);
                 }
-
-                const statuses: MarketState[] = ['ACTIVE', 'RESOLVING', 'RESOLVED', 'UNDETERMINED'];
-                let found: MarketData | null = null;
-                for (const s of statuses) {
-                    const list = await fetchMarketsByStatus(s);
-                    found = list.find((m) => {
-                        const cid = (m.contractId || '').toLowerCase();
-                        const mid = (m.id ? String(m.id) : '').toLowerCase();
-                        return cid === target || mid === target;
-                    }) || null;
-                    if (found) break;
-                }
-                if (!cancelled) setMarket(found);
             } catch (error) {
-                console.error('Error loading market:', error);
-                if (!cancelled) setMarket(null);
+                console.error('Error loading indexed market:', error);
+                if (!cancelled) {
+                    setMarket(null);
+                    setIsInvalidBet(true);
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
