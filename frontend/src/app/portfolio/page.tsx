@@ -283,8 +283,11 @@ export default function PortfolioPage() {
 
                 const resolvedOutcomeId = activity.resolvedOutcome ?? getResolvedOutcomeId(market);
                 const dbStatus = activity.status;
+                const hasPerBetResolution = inferredOutcome !== undefined && resolvedOutcomeId !== undefined;
                 const isResolved = dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED' || market.state === 'RESOLVED' || market.state === 'UNDETERMINED' || resolvedOutcomeId !== undefined || Boolean(aggregatePosition?.claimed) || Boolean(aggregatePosition?.positionValue && aggregatePosition.positionValue > 0);
-                const betWon = dbStatus === 'WIN' || dbStatus === 'CLAIMED' || (isResolved && inferredOutcome !== undefined && resolvedOutcomeId !== undefined && inferredOutcome === resolvedOutcomeId);
+                const betWon = hasPerBetResolution
+                    ? inferredOutcome === resolvedOutcomeId
+                    : dbStatus === 'WIN' || dbStatus === 'CLAIMED';
 
                 return {
                     id: `${activity.txHash}-${activity.logIndex}`,
@@ -448,9 +451,9 @@ export default function PortfolioPage() {
                                     const market = item.market;
                                     const claimPosition = item.position;
                                     const isResolved = Boolean(item.isResolved);
-                                    const isClaimed = Boolean(claimPosition?.claimed);
-                                    const isWinner = Boolean(item.isWinner) || (isClaimed && Boolean(claimPosition?.userWon));
-                                    const isClaimable = isWinner && Boolean(claimPosition?.canClaim);
+                                    const isWinner = Boolean(item.isWinner);
+                                    const isClaimed = isWinner && Boolean(claimPosition?.claimed);
+                                    const isClaimable = isWinner && !isClaimed && Boolean(claimPosition?.canClaim);
                                     const statusLabel = !isResolved ? "Running" : isWinner ? (isClaimed ? "Claimed" : "Win") : "Lose";
                                     const statusColor = !isResolved ? "#facc15" : isWinner ? "#22c55e" : "#fb7185";
                                     return (

@@ -18,32 +18,7 @@ const ChartSection: React.FC<ChartSectionProps> = ({ market, type }) => {
     const strikePrice = market?.strikePrice;
 
     if (isSport) {
-        return (
-            <div className={styles.chartSection}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                    <div className={styles.timeTabs}>
-                        <div style={{ fontSize: '12px', fontWeight: 600 }}>Live Match Score</div>
-                    </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        Source: football-data.org
-                    </div>
-                </div>
-
-                <div style={{ height: '320px', marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: '8px', flexDirection: 'column', gap: '16px' }}>
-                    <div style={{ fontSize: '18px', fontWeight: 'bold', color: 'var(--text)' }}>
-                        {market?.title || 'Sports Match'}
-                    </div>
-                    <div style={{ fontSize: '14px', color: 'var(--text-muted)' }}>
-                        Live score updates will be visible during the match.
-                    </div>
-                    {market?.sport?.homeGoals !== undefined && market?.sport?.awayGoals !== undefined && (
-                         <div style={{ fontSize: '32px', fontWeight: 'bold', color: 'var(--foreground)' }}>
-                             {market.sport.homeGoals} - {market.sport.awayGoals}
-                         </div>
-                    )}
-                </div>
-            </div>
-        );
+        return null;
     }
 
     return (

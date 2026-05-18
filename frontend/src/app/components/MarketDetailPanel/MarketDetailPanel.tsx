@@ -226,6 +226,7 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
                 </div>
                 <div className={styles.barBackground}>
                     <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
+                    <div className={styles.barFillNo} style={{ width: `${100 - probability}%` }}></div>
                 </div>
                 <div className={styles.binaryOutcomeLabels}>
                     <span className={styles.binaryLabelYes} title={market?.sideAName ?? 'Side A'}>{market?.sideAName ?? 'Side A'}</span>

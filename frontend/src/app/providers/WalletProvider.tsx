@@ -2,7 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useMemo } from 'react';
 import { PrivyProvider, usePrivy, useWallets } from '@privy-io/react-auth';
-import { WagmiProvider } from '@privy-io/wagmi';
+import { WagmiProvider, useSetActiveWallet } from '@privy-io/wagmi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { wagmiConfig } from '../../lib/onchain/wagmiConfig';
 import { seismicTestnet } from '../../lib/onchain/seismicChain';
@@ -24,32 +24,33 @@ const queryClient = new QueryClient();
 const PrivyWalletContextProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { ready, authenticated, login, logout } = usePrivy();
     const { wallets } = useWallets();
+    const { setActiveWallet } = useSetActiveWallet();
 
     const primaryWallet = wallets?.[0];
     const walletAddress = authenticated && primaryWallet ? primaryWallet.address : null;
     const isConnecting = !ready;
-    const [hasAttemptedSwitch, setHasAttemptedSwitch] = React.useState(false);
+
+    const syncActiveWallet = useCallback(async () => {
+        if (!ready || !authenticated || !primaryWallet) return;
+
+        const targetChainIdStr = `eip155:${seismicTestnet.id}`;
+        if (primaryWallet.chainId !== targetChainIdStr) {
+            await primaryWallet.switchChain(seismicTestnet.id);
+        }
+
+        await setActiveWallet(primaryWallet);
+    }, [ready, authenticated, primaryWallet, setActiveWallet]);
 
     React.useEffect(() => {
-        const autoSwitch = async () => {
-            if (ready && authenticated && primaryWallet && !hasAttemptedSwitch) {
-                const targetChainIdStr = `eip155:${seismicTestnet.id}`;
-                if (primaryWallet.chainId !== targetChainIdStr) {
-                    setHasAttemptedSwitch(true); // Mencegah spam popup jika user reject
-                    try {
-                        await primaryWallet.switchChain(seismicTestnet.id);
-                    } catch (e) {
-                        console.error('Failed to switch to Ritual Network:', e);
-                    }
-                }
-            }
-        };
-        autoSwitch();
-    }, [ready, authenticated, primaryWallet, hasAttemptedSwitch]);
+        syncActiveWallet().catch((error) => {
+            console.error('Failed to sync active Ritual wallet:', error);
+        });
+    }, [syncActiveWallet]);
 
     const connect = useCallback(async () => {
         await login();
-    }, [login]);
+        await syncActiveWallet();
+    }, [login, syncActiveWallet]);
 
     const disconnect = useCallback(async () => {
         await logout();

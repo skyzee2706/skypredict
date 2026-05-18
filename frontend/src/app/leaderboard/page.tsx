@@ -69,7 +69,7 @@ function LeaderboardRow({ entry, isMe = false, mode }: { entry: LeaderboardEntry
                 <div style={{ fontWeight: 850, color: mode === 'pnl' ? (entry.pnl >= 0n ? 'var(--success)' : 'var(--danger)') : 'var(--foreground)' }}>
                     {primaryValue}
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{mode === 'pnl' ? 'PNL Rank' : 'Volume Rank'}</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{mode === 'pnl' ? 'PNL' : 'Volume'}</div>
             </div>
 
             <div style={{ textAlign: 'right' }}>
@@ -138,7 +138,7 @@ export default function LeaderboardPage() {
                                         cursor: 'pointer',
                                     }}
                                 >
-                                    LB {item === 'volume' ? 'Volume' : 'PNL'}
+                                    {item === 'volume' ? 'Volume' : 'PNL'}
                                 </button>
                             ))}
                         </div>
