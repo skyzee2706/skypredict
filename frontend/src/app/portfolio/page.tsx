@@ -245,8 +245,9 @@ export default function PortfolioPage() {
 
             return betActivities.map((activity) => {
                 const aggregatePosition = marketByAddress.get(activity.market.toLowerCase());
-                const activityIsFinal = activity.status === 'WIN' || activity.status === 'LOSE' || activity.status === 'CLAIMED';
-                const market = aggregatePosition?.market ?? batchedMarkets.find((item) => item.contractId.toLowerCase() === activity.market.toLowerCase()) ?? {
+                const liveMarket = aggregatePosition?.market ?? batchedMarkets.find((item) => item.contractId.toLowerCase() === activity.market.toLowerCase());
+                const hasLiveMarket = Boolean(liveMarket);
+                const market = liveMarket ?? {
                     id: activity.market,
                     contractId: activity.market,
                     title: `Market ${shortAddress(activity.market)}`,
@@ -264,8 +265,8 @@ export default function PortfolioPage() {
                     resolutionRule: 'Activity data is loaded from the Supabase indexer.',
                     liquidity: 0,
                     volume: 0,
-                    state: activityIsFinal ? 'RESOLVED' : 'ACTIVE',
-                    resolvedOutcome: activity.resolvedOutcome,
+                    state: 'ACTIVE',
+                    resolvedOutcome: undefined,
                     probYes: 0,
                     probDraw: 0,
                     probNo: 0,
@@ -282,14 +283,14 @@ export default function PortfolioPage() {
                 const outcome = inferredOutcome === 0 ? (market.sideAName || 'YES') : inferredOutcome === 1 ? (market.drawName || 'DRAW') : inferredOutcome === 2 ? (market.sideBName || 'NO') : 'Bet';
 
                 const dbStatus = activity.status;
-                const hasFinalDbStatus = dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED';
                 const hasFinalMarketState = market.state === 'RESOLVED' || market.state === 'UNDETERMINED';
+                const hasFinalDbStatus = hasLiveMarket && (dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED');
                 const canUseResolvedOutcome = hasFinalDbStatus || hasFinalMarketState;
                 const resolvedOutcomeId = canUseResolvedOutcome
                     ? activity.resolvedOutcome ?? getResolvedOutcomeId(market)
                     : undefined;
                 const hasPerBetResolution = inferredOutcome !== undefined && resolvedOutcomeId !== undefined;
-                const isResolved = hasFinalDbStatus || hasFinalMarketState || hasPerBetResolution;
+                const isResolved = hasFinalMarketState || hasPerBetResolution;
                 const betWon = hasPerBetResolution
                     ? inferredOutcome === resolvedOutcomeId
                     : dbStatus === 'WIN' || dbStatus === 'CLAIMED';

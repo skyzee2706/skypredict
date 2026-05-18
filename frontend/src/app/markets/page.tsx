@@ -95,10 +95,19 @@ export default function MarketsPage() {
             return matchesCategory;
         })
         .sort((a, b) => {
-            // Sort by deadline earliest to latest
-            const aTime = typeof a.deadline === 'string' ? parseInt(a.deadline, 10) || 0 : a.deadline || 0;
-            const bTime = typeof b.deadline === 'string' ? parseInt(b.deadline, 10) || 0 : b.deadline || 0;
-            return aTime - bTime;
+            // Keep card positions deterministic across data refreshes.
+            // Some indexed rows can share the same deadline, so relying on source
+            // order makes cards appear to jump when Supabase returns rows in a
+            // different sequence.
+            const aTime = Number(a.deadline || a.bettingEndTime || 0);
+            const bTime = Number(b.deadline || b.bettingEndTime || 0);
+            if (aTime !== bTime) return aTime - bTime;
+
+            const aCreated = Number(a.creationDate || 0);
+            const bCreated = Number(b.creationDate || 0);
+            if (aCreated !== bCreated) return aCreated - bCreated;
+
+            return String(a.contractId || a.id).localeCompare(String(b.contractId || b.id));
         });
 
     const isGridLoading = allMarkets.length === 0 && isMarketsLoading;
