@@ -10,6 +10,27 @@ loadEnv(path.join(__dirname, '..', '..', '.env'));
 const FactoryArtifact = require('../src/lib/contracts/MarketFactory.json');
 const MarketArtifact = require('../src/lib/contracts/PredictionMarket.json');
 
+const OptimizedFactoryAbi = [
+  {
+    inputs: [
+      { internalType: 'uint256', name: 'offset', type: 'uint256' },
+      { internalType: 'uint256', name: 'limit', type: 'uint256' },
+    ],
+    name: 'getMarkets',
+    outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    name: 'isMarket',
+    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
+    stateMutability: 'view',
+    type: 'function',
+  },
+];
+const FactoryAbi = [...FactoryArtifact.abi, ...OptimizedFactoryAbi];
+
 const FACTORY_ADDRESS = process.env.NEXT_PUBLIC_FACTORY_ADDRESS || '0xc62d05bd0E86bc18cA9ea97996e1489293eB6F14';
 const TOKEN_ADDRESS = process.env.NEXT_PUBLIC_TOKEN_ADDRESS || process.env.NEXT_PUBLIC_SKYUSD_ADDRESS;
 const ROUTER_ADDRESS = process.env.NEXT_PUBLIC_ROUTER_ADDRESS;
@@ -156,7 +177,7 @@ async function readExistingUsers() {
 async function getMarkets() {
   const count = await client.readContract({
     address: FACTORY_ADDRESS,
-    abi: FactoryArtifact.abi,
+    abi: FactoryAbi,
     functionName: 'marketCount',
   }).catch(() => null);
 
@@ -167,7 +188,7 @@ async function getMarkets() {
     for (let offset = 0; offset < total; offset += pageSize) {
       pages.push(client.readContract({
         address: FACTORY_ADDRESS,
-        abi: FactoryArtifact.abi,
+        abi: FactoryAbi,
         functionName: 'getMarkets',
         args: [BigInt(offset), BigInt(pageSize)],
       }));
@@ -178,7 +199,7 @@ async function getMarkets() {
 
   const markets = await client.readContract({
     address: FACTORY_ADDRESS,
-    abi: FactoryArtifact.abi,
+    abi: FactoryAbi,
     functionName: 'getAllMarkets',
   });
   return [...markets].map((market) => market.toLowerCase());
