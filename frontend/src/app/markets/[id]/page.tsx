@@ -39,11 +39,15 @@ export default function MarketPage() {
 
                 const payload = (await response.json()) as IndexedMarketsResponse;
                 const markets = Array.isArray(payload.markets) ? payload.markets : [];
-                const found = markets.find((m) => {
+                const nowSec = Math.floor(Date.now() / 1000);
+                const foundRaw = markets.find((m) => {
                     const cid = (m.contractId || '').toLowerCase();
                     const mid = (m.id ? String(m.id) : '').toLowerCase();
                     return cid === target || mid === target;
                 }) || null;
+                const found = foundRaw && foundRaw.state !== 'RESOLVED' && Number(foundRaw.bettingEndTime || foundRaw.deadline || 0) <= nowSec
+                    ? { ...foundRaw, state: 'RESOLVING' as const }
+                    : foundRaw;
 
                 if (!cancelled) {
                     setMarket(found);

@@ -1,5 +1,5 @@
 import { Abi, createPublicClient, http, parseEther } from 'viem';
-import { getAccount, writeContract, switchChain } from '@wagmi/core';
+import { getAccount, writeContract, switchChain, getChainId } from '@wagmi/core';
 import { seismicTestnet } from './seismicChain';
 import { wagmiConfig } from './wagmiConfig';
 import PredictionMarketArtifact from '../contracts/PredictionMarket.json';
@@ -19,6 +19,14 @@ async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<void> {
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== 'success') {
     throw new Error('Transaction failed on-chain.');
+  }
+}
+
+async function ensureRitualWallet(): Promise<void> {
+  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  const activeChainId = getChainId(wagmiConfig);
+  if (activeChainId !== seismicTestnet.id) {
+    throw new Error(`Wrong network. Please switch your wallet to Ritual Network (${seismicTestnet.id}).`);
   }
 }
 
@@ -47,7 +55,7 @@ export async function isRouterApproved(userAddress: `0x${string}`): Promise<bool
  * After this, all bets on any market only need 1 tx each.
  */
 export async function approveRouter(): Promise<void> {
-  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  await ensureRitualWallet();
   const maxUint256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
   const hash = await writeContract(wagmiConfig, {
@@ -65,7 +73,7 @@ export async function approveRouter(): Promise<void> {
  * This is always a single transaction — no per-market approval needed.
  */
 export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutcome, amount: number): Promise<void> {
-  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  await ensureRitualWallet();
   const publicClient = getPublicClient();
   const account = getAccount(wagmiConfig);
   if (!account.address) throw new Error('Wallet not connected');
@@ -123,7 +131,7 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
 }
 
 export async function claimRewards(marketAddress: `0x${string}`): Promise<void> {
-  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  await ensureRitualWallet();
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: marketAddress,
@@ -157,7 +165,7 @@ export async function checkUsdlBalance(userAddress: `0x${string}`): Promise<bigi
 }
 
 export async function approveUsdlUnlimited(spenderAddress: `0x${string}`): Promise<void> {
-  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  await ensureRitualWallet();
   const maxUint256 = BigInt('0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff');
 
   const hash = await writeContract(wagmiConfig, {
@@ -175,7 +183,7 @@ export async function approveUsdlUnlimited(spenderAddress: `0x${string}`): Promi
  * @param ritualAmount Amount in RITUAL (e.g. 0.01 for minimum, up to 1.0)
  */
 export async function depositRitual(ritualAmount: number = 0.01): Promise<void> {
-  await switchChain(wagmiConfig, { chainId: seismicTestnet.id });
+  await ensureRitualWallet();
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: TOKEN_ADDRESS as `0x${string}`,

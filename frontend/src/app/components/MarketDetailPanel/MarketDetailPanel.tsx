@@ -221,15 +221,15 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
         return (
             <div className={styles.progressBarContainer}>
                 <div className={styles.probabilityText}>
-                    <span style={{ color: 'var(--foreground)' }}>{probability.toFixed(1)}%</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{(100 - probability).toFixed(1)}%</span>
+                    <span className={styles.binaryProbYes}>{probability.toFixed(1)}%</span>
+                    <span className={styles.binaryProbNo}>{(100 - probability).toFixed(1)}%</span>
                 </div>
                 <div className={styles.barBackground}>
                     <div className={styles.barFill} style={{ width: `${probability}%` }}></div>
                 </div>
                 <div className={styles.binaryOutcomeLabels}>
-                    <span title={market?.sideAName ?? 'Side A'}>{market?.sideAName ?? 'Side A'}</span>
-                    <span title={market?.sideBName ?? 'Side B'}>{market?.sideBName ?? 'Side B'}</span>
+                    <span className={styles.binaryLabelYes} title={market?.sideAName ?? 'Side A'}>{market?.sideAName ?? 'Side A'}</span>
+                    <span className={styles.binaryLabelNo} title={market?.sideBName ?? 'Side B'}>{market?.sideBName ?? 'Side B'}</span>
                 </div>
             </div>
         );

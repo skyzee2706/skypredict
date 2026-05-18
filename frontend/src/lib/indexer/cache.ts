@@ -24,6 +24,10 @@ export type CachedActivity = {
     blockNumber: string;
     logIndex: number;
     timestamp: number;
+    status?: 'RUNNING' | 'WIN' | 'LOSE' | 'CLAIMED';
+    resolvedOutcome?: number;
+    payout?: string;
+    claimed?: boolean;
 };
 
 export type IndexerCache = {

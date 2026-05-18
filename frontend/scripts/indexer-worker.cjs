@@ -101,6 +101,7 @@ function getUser(map, address) {
       markets: new Set(),
       positions: new Map(),
       activities: [],
+      marketResults: new Map(),
     });
   }
   return map.get(key);
@@ -164,11 +165,27 @@ async function readExistingUsers() {
 
   const { data: activityRows, error: activityError } = await supabase
     .from('user_activities')
-    .select('tx_hash, log_index, market_address');
+    .select('tx_hash, log_index, market_address, user_address, type, outcome, amount, block_number, timestamp, status, resolved_outcome, payout, claimed');
   if (activityError) throw activityError;
   for (const row of activityRows || []) {
     indexedActivityKeys.add(`${row.tx_hash}:${row.log_index}`);
     txMarketKeys.add(`${row.tx_hash}:${normalize(row.market_address)}`);
+    const user = getUser(users, row.user_address);
+    user.activities.push({
+      tx_hash: row.tx_hash,
+      log_index: row.log_index,
+      user_address: user.address,
+      market_address: normalize(row.market_address),
+      type: row.type,
+      outcome: row.outcome === null || row.outcome === undefined ? null : Number(row.outcome),
+      amount: String(row.amount || '0'),
+      block_number: String(row.block_number || '0'),
+      timestamp: Number(row.timestamp || 0),
+      status: row.status || 'RUNNING',
+      resolved_outcome: row.resolved_outcome === null || row.resolved_outcome === undefined ? null : Number(row.resolved_outcome),
+      payout: String(row.payout || '0'),
+      claimed: Boolean(row.claimed),
+    });
   }
 
   return { users, indexedActivityKeys, txMarketKeys };
@@ -405,6 +422,10 @@ async function scanRouterBets(markets, fromBlock, toBlock, users, indexedActivit
         amount: amount.toString(),
         block_number: log.blockNumber.toString(),
         timestamp: Date.now(),
+        status: 'RUNNING',
+        resolved_outcome: null,
+        payout: '0',
+        claimed: false,
       }, indexedActivityKeys, txMarketKeys);
       if (inserted) {
         user.volume += amount;
@@ -455,6 +476,10 @@ async function scanTransfers(markets, fromBlock, toBlock, users, indexedActivity
           amount: value.toString(),
           block_number: log.blockNumber.toString(),
           timestamp: Date.now(),
+          status: 'RUNNING',
+          resolved_outcome: null,
+          payout: '0',
+          claimed: false,
         }, indexedActivityKeys, txMarketKeys);
         if (inserted) {
           user.volume += value;
@@ -540,6 +565,12 @@ async function reconcilePositions(users) {
         pnl: positionValue - total,
         claimed: Boolean(raw[3]),
       });
+      user.marketResults.set(market, {
+        resolved,
+        winner,
+        positionValue,
+        claimed: Boolean(raw[3]),
+      });
     }
 
     // PNL is claimable/current value minus trading volume.
@@ -573,6 +604,62 @@ function buildLeaderboard(users) {
     .sort((a, b) => (BigInt(b.pnl) > BigInt(a.pnl) ? 1 : BigInt(b.pnl) < BigInt(a.pnl) ? -1 : 0))
     .forEach((row, index) => { row.pnl_rank = index + 1; });
   return rows;
+}
+
+function applyActivityResults(users) {
+  for (const user of users.values()) {
+    for (const activity of user.activities) {
+      if (activity.type !== 'BET') continue;
+      const market = normalize(activity.market_address);
+      const result = user.marketResults.get(market);
+      if (!result || !result.resolved) {
+        activity.status = 'RUNNING';
+        activity.resolved_outcome = null;
+        activity.payout = '0';
+        activity.claimed = false;
+        continue;
+      }
+
+      const outcome = activity.outcome === null || activity.outcome === undefined ? null : Number(activity.outcome);
+      const isWin = outcome !== null && outcome === result.winner;
+      activity.status = isWin ? (result.claimed ? 'CLAIMED' : 'WIN') : 'LOSE';
+      activity.resolved_outcome = result.winner;
+      activity.payout = isWin ? result.positionValue.toString() : '0';
+      activity.claimed = isWin && result.claimed;
+    }
+  }
+}
+
+async function cleanupFinalizedRunningActivities() {
+  const { data, error } = await supabase
+    .from('user_activities')
+    .select('tx_hash, log_index, user_address, market_address, status')
+    .in('status', ['RUNNING', 'WIN', 'LOSE', 'CLAIMED']);
+  if (error) throw error;
+
+  const finalizedMarkets = new Set();
+  for (const row of data || []) {
+    if (row.status === 'WIN' || row.status === 'LOSE' || row.status === 'CLAIMED') {
+      finalizedMarkets.add(`${normalize(row.user_address)}:${normalize(row.market_address)}`);
+    }
+  }
+
+  const staleRunningRows = (data || []).filter((row) => (
+    row.status === 'RUNNING' && finalizedMarkets.has(`${normalize(row.user_address)}:${normalize(row.market_address)}`)
+  ));
+
+  for (const row of staleRunningRows) {
+    const { error: deleteError } = await supabase
+      .from('user_activities')
+      .delete()
+      .eq('tx_hash', row.tx_hash)
+      .eq('log_index', row.log_index);
+    if (deleteError) throw deleteError;
+  }
+
+  if (staleRunningRows.length) {
+    console.log(`[indexer] deleted stale running activities=${staleRunningRows.length}`);
+  }
 }
 
 async function save(users, leaderboardRows, lastProcessedBlock) {
@@ -612,7 +699,15 @@ async function save(users, leaderboardRows, lastProcessedBlock) {
     if (error) throw error;
   }
   if (activityRows.length) {
-    const { error } = await supabase.from('user_activities').upsert(activityRows, { onConflict: 'tx_hash,log_index' });
+    const hydratedActivityRows = activityRows.map((row) => ({
+      ...row,
+      status: row.status || 'RUNNING',
+      resolved_outcome: row.resolved_outcome ?? null,
+      payout: row.payout || '0',
+      claimed: Boolean(row.claimed),
+      updated_at: now,
+    }));
+    const { error } = await supabase.from('user_activities').upsert(hydratedActivityRows, { onConflict: 'tx_hash,log_index' });
     if (error) throw error;
   }
   if (leaderboardRows.length) {
@@ -650,8 +745,10 @@ async function tick() {
   await scanRouterBets(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
   await scanTransfers(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
   await reconcilePositions(users);
+  applyActivityResults(users);
   const leaderboardRows = buildLeaderboard(users);
   await save(users, leaderboardRows, targetBlock);
+  await cleanupFinalizedRunningActivities();
   console.log(`[indexer] saved users=${leaderboardRows.length}, lastProcessedBlock=${targetBlock}`);
 }
 

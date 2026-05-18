@@ -390,9 +390,21 @@
     display: flex;
     justify-content: space-between;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
     color: var(--text-muted);
+    gap: 8px;
 }
+
+.trendingOdds span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trendingOddYes { color: var(--success); }
+.trendingOddDraw { color: hsl(43, 96%, 62%); }
+.trendingOddNo { color: var(--danger); }
 
 .trendingEmpty {
     text-align: center;

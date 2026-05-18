@@ -8,24 +8,38 @@ interface ProbabilityGaugeProps {
 }
 
 const ProbabilityGauge: React.FC<ProbabilityGaugeProps> = ({ probability, market }) => {
-    // If it's a sports market, display a 3-way compact textual odds indicator
-    if (market?.category === 'SPORTS') {
+    if (market) {
         const probYes = (market.probYes * 100).toFixed(0);
         const probDraw = ((market.probDraw ?? 0) * 100).toFixed(0);
         const probNo = (market.probNo * 100).toFixed(0);
-        
+
+        if (market.category === 'SPORTS') {
+            return (
+                <div className={styles.sportsOdds} aria-label="Sports market odds">
+                    <div className={`${styles.sportsOutcome} ${styles.sideAOutcome}`}>
+                        <span className={styles.outcomeLabel}>Home</span>
+                        <strong>{probYes}%</strong>
+                    </div>
+                    <div className={`${styles.sportsOutcome} ${styles.drawOutcome}`}>
+                        <span className={styles.outcomeLabel}>Draw</span>
+                        <strong>{probDraw}%</strong>
+                    </div>
+                    <div className={`${styles.sportsOutcome} ${styles.sideBOutcome}`}>
+                        <span className={styles.outcomeLabel}>Away</span>
+                        <strong>{probNo}%</strong>
+                    </div>
+                </div>
+            );
+        }
+
         return (
-            <div className={styles.sportsOdds} aria-label="Sports market odds">
+            <div className={styles.binaryOdds} aria-label="Crypto market odds">
                 <div className={`${styles.sportsOutcome} ${styles.sideAOutcome}`}>
-                    <span className={styles.outcomeLabel}>Home</span>
+                    <span className={styles.outcomeLabel}>{market.sideAName ?? 'YES'}</span>
                     <strong>{probYes}%</strong>
                 </div>
-                <div className={`${styles.sportsOutcome} ${styles.drawOutcome}`}>
-                    <span className={styles.outcomeLabel}>Draw</span>
-                    <strong>{probDraw}%</strong>
-                </div>
                 <div className={`${styles.sportsOutcome} ${styles.sideBOutcome}`}>
-                    <span className={styles.outcomeLabel}>Away</span>
+                    <span className={styles.outcomeLabel}>{market.sideBName ?? 'NO'}</span>
                     <strong>{probNo}%</strong>
                 </div>
             </div>

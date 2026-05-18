@@ -109,9 +109,9 @@ const LandingView: React.FC = () => {
                         )}
                     </div>
                     <div className={styles.trendingOdds}>
-                        <span>{market.sideAName ?? 'YES'} {Math.round(market.probYes * 100)}%</span>
-                        {(market.probDraw ?? 0) > 0 && <span>{market.drawName ?? 'Draw'} {Math.round((market.probDraw ?? 0) * 100)}%</span>}
-                        <span>{market.sideBName ?? 'NO'} {Math.round(market.probNo * 100)}%</span>
+                        <span className={styles.trendingOddYes}>{market.sideAName ?? 'YES'} {Math.round(market.probYes * 100)}%</span>
+                        {(market.probDraw ?? 0) > 0 && <span className={styles.trendingOddDraw}>{market.drawName ?? 'Draw'} {Math.round((market.probDraw ?? 0) * 100)}%</span>}
+                        <span className={styles.trendingOddNo}>{market.sideBName ?? 'NO'} {Math.round(market.probNo * 100)}%</span>
                     </div>
                 </div>
             </div>

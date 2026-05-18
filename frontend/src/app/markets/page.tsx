@@ -47,11 +47,14 @@ export default function MarketsPage() {
     // Derived state for currently filtered markets
     const currentMarkets = React.useMemo(() => {
         return allMarkets.filter((m: MarketData) => {
+            const deadline = Number(m.bettingEndTime || m.deadline || 0);
+            const isPastBettingEnd = m.state !== 'RESOLVED' && deadline > 0 && deadline <= now;
+            const liveState: MarketState = isPastBettingEnd ? 'RESOLVING' : m.state;
+
             if (activeMarketState === 'UNDETERMINED') {
-                const deadline = Number(m.deadline);
-                return m.state !== 'RESOLVED' && deadline > 0 && deadline < now;
+                return false;
             }
-            return m.state === activeMarketState;
+            return liveState === activeMarketState;
         });
     }, [allMarkets, activeMarketState, now]);
 

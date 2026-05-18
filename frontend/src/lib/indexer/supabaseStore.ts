@@ -28,6 +28,10 @@ type ActivityRow = {
   amount: string | number;
   block_number: string | number;
   timestamp: number;
+  status?: 'RUNNING' | 'WIN' | 'LOSE' | 'CLAIMED' | null;
+  resolved_outcome?: number | null;
+  payout?: string | number | null;
+  claimed?: boolean | null;
 };
 
 type LeaderboardRow = {
@@ -73,6 +77,10 @@ function toActivity(row: ActivityRow): CachedActivity {
     amount: String(row.amount),
     blockNumber: String(row.block_number),
     timestamp: row.timestamp,
+    status: row.status ?? undefined,
+    resolvedOutcome: row.resolved_outcome ?? undefined,
+    payout: row.payout === undefined || row.payout === null ? undefined : String(row.payout),
+    claimed: row.claimed ?? undefined,
   };
 }
 
@@ -227,11 +235,16 @@ export async function readSupabaseLeaderboard(address?: string, limit = DEFAULT_
 
   const supabase = getSupabaseAdmin();
   const normalized = address?.toLowerCase();
-  const [leaderboardResult, currentUserResult, stateResult] = await Promise.all([
+  const [volumeLeaderboardResult, pnlLeaderboardResult, currentUserResult, stateResult] = await Promise.all([
     supabase
       .from('leaderboard')
       .select('*')
       .order('volume_rank', { ascending: true })
+      .limit(limit),
+    supabase
+      .from('leaderboard')
+      .select('*')
+      .order('pnl_rank', { ascending: true })
       .limit(limit),
     normalized
       ? supabase
@@ -247,11 +260,13 @@ export async function readSupabaseLeaderboard(address?: string, limit = DEFAULT_
       .maybeSingle(),
   ]);
 
-  if (leaderboardResult.error) throw leaderboardResult.error;
+  if (volumeLeaderboardResult.error) throw volumeLeaderboardResult.error;
+  if (pnlLeaderboardResult.error) throw pnlLeaderboardResult.error;
   if (currentUserResult.error) throw currentUserResult.error;
   if (stateResult.error) throw stateResult.error;
 
-  const leaderboard = ((leaderboardResult.data ?? []) as LeaderboardRow[]).map(toLeaderboardEntry);
+  const volumeLeaderboard = ((volumeLeaderboardResult.data ?? []) as LeaderboardRow[]).map(toLeaderboardEntry);
+  const pnlLeaderboard = ((pnlLeaderboardResult.data ?? []) as LeaderboardRow[]).map(toLeaderboardEntry);
   const currentUser = currentUserResult.data
     ? toLeaderboardEntry(currentUserResult.data as LeaderboardRow)
     : null;
@@ -260,7 +275,9 @@ export async function readSupabaseLeaderboard(address?: string, limit = DEFAULT_
     version: 1,
     updatedAt: stateResult.data?.updated_at ? Date.parse(stateResult.data.updated_at) : 0,
     lastProcessedBlock: stateResult.data?.last_processed_block ? String(stateResult.data.last_processed_block) : '0',
-    leaderboard,
+    leaderboard: volumeLeaderboard,
+    volumeLeaderboard,
+    pnlLeaderboard,
     currentUser,
     cached: true,
     source: 'supabase' as const,

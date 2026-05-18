@@ -40,9 +40,21 @@ create table if not exists user_activities (
   amount numeric not null default 0,
   block_number numeric not null,
   timestamp bigint not null,
+  status text not null default 'RUNNING',
+  resolved_outcome integer,
+  payout numeric not null default 0,
+  claimed boolean not null default false,
+  updated_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   primary key (tx_hash, log_index)
 );
+
+alter table user_activities
+  add column if not exists status text not null default 'RUNNING',
+  add column if not exists resolved_outcome integer,
+  add column if not exists payout numeric not null default 0,
+  add column if not exists claimed boolean not null default false,
+  add column if not exists updated_at timestamptz not null default now();
 
 create index if not exists idx_user_activities_user_block
 on user_activities (user_address, block_number desc);

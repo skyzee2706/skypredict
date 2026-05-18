@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatUnits } from 'viem';
 import { useAccount } from 'wagmi';
@@ -8,12 +8,14 @@ import Header from '../components/Header/Header';
 import styles from '../page.module.css';
 import { useLeaderboard, LeaderboardEntry } from '@/hooks/useLeaderboard';
 
+type LeaderboardMode = 'volume' | 'pnl';
+
 function shortAddress(address: string) {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function formatAmount(value: bigint) {
-    const formatted = Number(formatUnits(value, 18));
+    const formatted = Number(formatUnits(value < 0n ? -value : value, 18));
     if (!Number.isFinite(formatted)) return '0';
     return new Intl.NumberFormat('en-US', {
         maximumFractionDigits: formatted >= 1000 ? 1 : 2,
@@ -21,10 +23,12 @@ function formatAmount(value: bigint) {
     }).format(formatted);
 }
 
-function LeaderboardRow({ entry, isMe = false }: { entry: LeaderboardEntry; isMe?: boolean }) {
-    const rankLabel = entry.volumeRank <= 3
-        ? ['🥇', '🥈', '🥉'][entry.volumeRank - 1]
-        : `#${entry.volumeRank}`;
+function LeaderboardRow({ entry, isMe = false, mode }: { entry: LeaderboardEntry; isMe?: boolean; mode: LeaderboardMode }) {
+    const rank = mode === 'pnl' ? entry.pnlRank : entry.volumeRank;
+    const rankLabel = rank <= 3 ? ['🥇', '🥈', '🥉'][rank - 1] : `#${rank}`;
+    const primaryValue = mode === 'pnl'
+        ? `${entry.pnl >= 0n ? '+' : '-'}${formatAmount(entry.pnl)}`
+        : formatAmount(entry.volume);
 
     return (
         <div style={{
@@ -44,10 +48,10 @@ function LeaderboardRow({ entry, isMe = false }: { entry: LeaderboardEntry; isMe
                 borderRadius: 12,
                 display: 'grid',
                 placeItems: 'center',
-                color: entry.volumeRank <= 3 ? '#fffdf7' : 'var(--foreground)',
-                background: entry.volumeRank <= 3 ? 'var(--primary)' : 'var(--section-bg)',
+                color: rank <= 3 ? '#fffdf7' : 'var(--foreground)',
+                background: rank <= 3 ? 'var(--primary)' : 'var(--section-bg)',
                 fontWeight: 900,
-                fontSize: entry.volumeRank <= 3 ? 18 : 13,
+                fontSize: rank <= 3 ? 18 : 13,
             }}>
                 {rankLabel}
             </div>
@@ -62,13 +66,15 @@ function LeaderboardRow({ entry, isMe = false }: { entry: LeaderboardEntry; isMe
             </div>
 
             <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 850, color: 'var(--foreground)' }}>{formatAmount(entry.volume)}</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Volume</div>
+                <div style={{ fontWeight: 850, color: mode === 'pnl' ? (entry.pnl >= 0n ? 'var(--success)' : 'var(--danger)') : 'var(--foreground)' }}>
+                    {primaryValue}
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{mode === 'pnl' ? 'PNL Rank' : 'Volume Rank'}</div>
             </div>
 
             <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 850, color: entry.pnl >= 0n ? 'var(--success)' : 'var(--danger)' }}>
-                    {entry.pnl >= 0n ? '+' : ''}{formatAmount(entry.pnl)}
+                    {entry.pnl >= 0n ? '+' : '-'}{formatAmount(entry.pnl)}
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>PNL</div>
             </div>
@@ -79,8 +85,12 @@ function LeaderboardRow({ entry, isMe = false }: { entry: LeaderboardEntry; isMe
 export default function LeaderboardPage() {
     const router = useRouter();
     const { address } = useAccount();
-    const { entries, currentUser, isLoading, error, lastProcessedBlock } = useLeaderboard();
-    const userInTop20 = Boolean(address && entries.some((entry) => entry.address.toLowerCase() === address.toLowerCase()));
+    const { volumeEntries, pnlEntries, currentUser, isLoading, error, lastProcessedBlock } = useLeaderboard();
+    const [mode, setMode] = useState<LeaderboardMode>('volume');
+    const activeEntries = mode === 'pnl' ? pnlEntries : volumeEntries;
+    const userInTop20 = Boolean(address && activeEntries.some((entry) => entry.address.toLowerCase() === address.toLowerCase()));
+    const activeTitle = mode === 'pnl' ? 'Top 20 traders by realized PNL' : 'Top 20 traders by volume';
+    const currentUserForMode = useMemo(() => currentUser, [currentUser]);
 
     return (
         <>
@@ -98,18 +108,39 @@ export default function LeaderboardPage() {
             <div className={styles.mainContainer}>
                 <div className={styles.contentArea}>
                     <div className={styles.scrollContent} style={{ paddingTop: 28 }}>
-                        <div className={styles.sectionHeader} style={{ alignItems: 'flex-end' }}>
+                        <div className={styles.sectionHeader} style={{ alignItems: 'flex-end', gap: 16 }}>
                             <div>
                                 <h1 className={styles.sectionTitle} style={{ fontSize: 30, marginBottom: 6 }}>
                                     Leaderboard
                                 </h1>
                                 <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
-                                    Top 20 traders by volume
+                                    {activeTitle} from indexed database stats
                                 </p>
                             </div>
                             <div style={{ color: 'var(--text-muted)', fontSize: 12 }}>
                                 Block {lastProcessedBlock || '-'}
                             </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+                            {(['volume', 'pnl'] as const).map((item) => (
+                                <button
+                                    key={item}
+                                    type="button"
+                                    onClick={() => setMode(item)}
+                                    style={{
+                                        border: mode === item ? '1px solid var(--primary)' : '1px solid var(--card-border)',
+                                        background: mode === item ? 'var(--primary)' : 'var(--surface-elevated)',
+                                        color: mode === item ? '#fff' : 'var(--text-secondary)',
+                                        borderRadius: 999,
+                                        padding: '10px 16px',
+                                        fontWeight: 900,
+                                        cursor: 'pointer',
+                                    }}
+                                >
+                                    LB {item === 'volume' ? 'Volume' : 'PNL'}
+                                </button>
+                            ))}
                         </div>
 
                         <div style={{
@@ -124,7 +155,7 @@ export default function LeaderboardPage() {
                                 <div className={styles.emptyState}>Loading leaderboard...</div>
                             ) : error ? (
                                 <div className={styles.emptyState} style={{ color: 'var(--danger)' }}>{error}</div>
-                            ) : entries.length === 0 ? (
+                            ) : activeEntries.length === 0 ? (
                                 <div className={styles.emptyState} style={{ minHeight: 180, flexDirection: 'column', gap: 8, textAlign: 'center' }}>
                                     <strong style={{ color: 'var(--foreground)' }}>No traders yet</strong>
                                     <span style={{ maxWidth: 520, fontSize: 13 }}>
@@ -133,10 +164,11 @@ export default function LeaderboardPage() {
                                 </div>
                             ) : (
                                 <div style={{ display: 'grid', gap: 10 }}>
-                                    {entries.map((entry) => (
+                                    {activeEntries.map((entry) => (
                                         <LeaderboardRow
                                             key={entry.address}
                                             entry={entry}
+                                            mode={mode}
                                             isMe={Boolean(address && entry.address.toLowerCase() === address.toLowerCase())}
                                         />
                                     ))}
@@ -144,12 +176,12 @@ export default function LeaderboardPage() {
                             )}
                         </div>
 
-                        {currentUser && !userInTop20 && (
+                        {currentUserForMode && !userInTop20 && (
                             <div style={{ marginTop: 20 }}>
                                 <div style={{ marginBottom: 10, color: 'var(--text-secondary)', fontWeight: 800, fontSize: 14 }}>
                                     Your rank
                                 </div>
-                                <LeaderboardRow entry={currentUser} isMe />
+                                <LeaderboardRow entry={currentUserForMode} isMe mode={mode} />
                             </div>
                         )}
                     </div>

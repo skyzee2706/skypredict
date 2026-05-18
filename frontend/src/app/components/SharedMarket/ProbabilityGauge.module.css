@@ -17,7 +17,8 @@
     letter-spacing: -0.5px;
 }
 
-.sportsOdds {
+.sportsOdds,
+.binaryOdds {
     display: flex;
     flex-direction: column;
     gap: 3px;

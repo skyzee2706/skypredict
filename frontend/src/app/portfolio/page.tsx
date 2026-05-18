@@ -37,6 +37,10 @@ type CachedPortfolioResponse = {
         blockNumber: string;
         logIndex: number;
         timestamp: number;
+        status?: 'RUNNING' | 'WIN' | 'LOSE' | 'CLAIMED';
+        resolvedOutcome?: number;
+        payout?: string;
+        claimed?: boolean;
     }>;
     updatedAt: number;
     source?: string;
@@ -69,6 +73,21 @@ function shortAddress(addr: string) {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+function getResolvedOutcomeId(market: MarketData): number | undefined {
+    if (market.resolvedOutcome === undefined || market.resolvedOutcome === null) return undefined;
+    const resolved = String(market.resolvedOutcome).trim().toLowerCase();
+    if (!resolved) return undefined;
+
+    const sideA = String(market.sideAName || 'YES').trim().toLowerCase();
+    const draw = String(market.drawName || 'DRAW').trim().toLowerCase();
+    const sideB = String(market.sideBName || 'NO').trim().toLowerCase();
+
+    if (resolved === sideA || resolved === 'yes' || resolved === 'home' || resolved === 'side_a') return 0;
+    if (resolved === draw || resolved === 'draw') return 1;
+    if (resolved === sideB || resolved === 'no' || resolved === 'away' || resolved === 'side_b') return 2;
+    return undefined;
+}
+
 export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
@@ -98,6 +117,9 @@ export default function PortfolioPage() {
             const pnl = parseIndexedAmount(position.pnl);
             const positionValue = payout > 0 ? payout : volume + pnl;
 
+            const isResolved = marketMetadata?.state === 'RESOLVED' || marketMetadata?.state === 'UNDETERMINED' || position.claimed || payout > 0;
+            const userWon = isResolved && payout > 0;
+
             return {
                 market: marketMetadata ?? {
                     id: marketAddress,
@@ -117,7 +139,7 @@ export default function PortfolioPage() {
                     resolutionRule: 'Position/accounting data is loaded from the Supabase indexer.',
                     liquidity: volume,
                     volume,
-                    state: position.claimed ? 'RESOLVED' : 'ACTIVE',
+                    state: position.claimed || payout > 0 ? 'RESOLVED' : 'ACTIVE',
                     resolvedOutcome: undefined,
                     probYes: 0,
                     probDraw: 0,
@@ -130,8 +152,8 @@ export default function PortfolioPage() {
                 sideB,
                 total: volume,
                 claimed: position.claimed,
-                canClaim: false,
-                userWon: positionValue > volume,
+                canClaim: userWon && !position.claimed,
+                userWon,
                 positionValue,
             };
         });
@@ -223,6 +245,7 @@ export default function PortfolioPage() {
 
             return betActivities.map((activity) => {
                 const aggregatePosition = marketByAddress.get(activity.market.toLowerCase());
+                const activityIsFinal = activity.status === 'WIN' || activity.status === 'LOSE' || activity.status === 'CLAIMED';
                 const market = aggregatePosition?.market ?? batchedMarkets.find((item) => item.contractId.toLowerCase() === activity.market.toLowerCase()) ?? {
                     id: activity.market,
                     contractId: activity.market,
@@ -241,8 +264,8 @@ export default function PortfolioPage() {
                     resolutionRule: 'Activity data is loaded from the Supabase indexer.',
                     liquidity: 0,
                     volume: 0,
-                    state: 'ACTIVE',
-                    resolvedOutcome: undefined,
+                    state: activityIsFinal ? 'RESOLVED' : 'ACTIVE',
+                    resolvedOutcome: activity.resolvedOutcome,
                     probYes: 0,
                     probDraw: 0,
                     probNo: 0,
@@ -258,6 +281,11 @@ export default function PortfolioPage() {
                 );
                 const outcome = inferredOutcome === 0 ? (market.sideAName || 'YES') : inferredOutcome === 1 ? (market.drawName || 'DRAW') : inferredOutcome === 2 ? (market.sideBName || 'NO') : 'Bet';
 
+                const resolvedOutcomeId = activity.resolvedOutcome ?? getResolvedOutcomeId(market);
+                const dbStatus = activity.status;
+                const isResolved = dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED' || market.state === 'RESOLVED' || market.state === 'UNDETERMINED' || resolvedOutcomeId !== undefined || Boolean(aggregatePosition?.claimed) || Boolean(aggregatePosition?.positionValue && aggregatePosition.positionValue > 0);
+                const betWon = dbStatus === 'WIN' || dbStatus === 'CLAIMED' || (isResolved && inferredOutcome !== undefined && resolvedOutcomeId !== undefined && inferredOutcome === resolvedOutcomeId);
+
                 return {
                     id: `${activity.txHash}-${activity.logIndex}`,
                     market,
@@ -270,6 +298,8 @@ export default function PortfolioPage() {
                     txHash: activity.txHash,
                     timestamp: activity.timestamp,
                     position: aggregatePosition,
+                    isResolved,
+                    isWinner: betWon,
                 };
             }).sort((a, b) => Number(b.blockNumber) - Number(a.blockNumber));
         }
@@ -288,6 +318,8 @@ export default function PortfolioPage() {
                 txHash: undefined,
                 timestamp: 0,
                 position,
+                isResolved: position.market.state === 'RESOLVED' || position.market.state === 'UNDETERMINED' || position.claimed || position.positionValue > 0,
+                isWinner: position.userWon,
             }));
     }, [batchedMarkets, cachedPortfolio, displayedPositions]);
 
@@ -415,10 +447,10 @@ export default function PortfolioPage() {
                                 {paginatedHistoryItems.map((item) => {
                                     const market = item.market;
                                     const claimPosition = item.position;
-                                    const isResolved = market.state === "RESOLVED" || market.state === "UNDETERMINED";
+                                    const isResolved = Boolean(item.isResolved);
                                     const isClaimed = Boolean(claimPosition?.claimed);
-                                    const isWinner = isResolved && (Boolean(claimPosition?.userWon) || isClaimed);
-                                    const isClaimable = Boolean(claimPosition?.canClaim);
+                                    const isWinner = Boolean(item.isWinner) || (isClaimed && Boolean(claimPosition?.userWon));
+                                    const isClaimable = isWinner && Boolean(claimPosition?.canClaim);
                                     const statusLabel = !isResolved ? "Running" : isWinner ? (isClaimed ? "Claimed" : "Win") : "Lose";
                                     const statusColor = !isResolved ? "#facc15" : isWinner ? "#22c55e" : "#fb7185";
                                     return (
@@ -426,7 +458,7 @@ export default function PortfolioPage() {
                                             <div>
                                                 <p style={{ color: "var(--text-primary)", fontWeight: 900, marginBottom: "3px", fontSize: "13px", lineHeight: 1.25 }}>{market.title}</p>
                                                 <p style={{ color: "var(--text-muted)", fontSize: "11px" }}>
-                                                    {market.category} · {market.state === "RESOLVED" ? "Finalized" : market.state} · Block #{item.blockNumber}
+                                                    {market.category} · {isResolved ? "Finalized" : market.state} · Block #{item.blockNumber}
                                                 </p>
                                                 {item.txHash && (
                                                     <p style={{ color: "var(--text-muted)", fontSize: "10px", marginTop: "3px", fontFamily: "monospace" }}>

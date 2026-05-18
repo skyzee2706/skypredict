@@ -129,6 +129,16 @@
     color: var(--text-secondary);
 }
 
+.binaryProbYes,
+.binaryLabelYes {
+    color: var(--success) !important;
+}
+
+.binaryProbNo,
+.binaryLabelNo {
+    color: var(--danger) !important;
+}
+
 .sportsProgressBarContainer {
     width: 100%;
     max-width: 100%;
