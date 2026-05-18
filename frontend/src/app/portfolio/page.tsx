@@ -117,7 +117,8 @@ export default function PortfolioPage() {
             const pnl = parseIndexedAmount(position.pnl);
             const positionValue = payout > 0 ? payout : volume + pnl;
 
-            const isResolved = marketMetadata?.state === 'RESOLVED' || marketMetadata?.state === 'UNDETERMINED' || position.claimed || payout > 0;
+            const hasMarketMetadata = Boolean(marketMetadata);
+            const isResolved = Boolean(marketMetadata?.state === 'RESOLVED' || marketMetadata?.state === 'UNDETERMINED');
             const userWon = isResolved && payout > 0;
 
             return {
@@ -139,7 +140,7 @@ export default function PortfolioPage() {
                     resolutionRule: 'Position/accounting data is loaded from the Supabase indexer.',
                     liquidity: volume,
                     volume,
-                    state: position.claimed || payout > 0 ? 'RESOLVED' : 'ACTIVE',
+                    state: 'ACTIVE',
                     resolvedOutcome: undefined,
                     probYes: 0,
                     probDraw: 0,
@@ -151,10 +152,10 @@ export default function PortfolioPage() {
                 draw,
                 sideB,
                 total: volume,
-                claimed: position.claimed,
+                claimed: hasMarketMetadata && position.claimed,
                 canClaim: userWon && !position.claimed,
                 userWon,
-                positionValue,
+                positionValue: isResolved ? positionValue : 0,
             };
         });
     }, [batchedMarkets, cachedPortfolio]);
