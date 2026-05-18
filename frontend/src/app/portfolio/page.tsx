@@ -281,10 +281,15 @@ export default function PortfolioPage() {
                 );
                 const outcome = inferredOutcome === 0 ? (market.sideAName || 'YES') : inferredOutcome === 1 ? (market.drawName || 'DRAW') : inferredOutcome === 2 ? (market.sideBName || 'NO') : 'Bet';
 
-                const resolvedOutcomeId = activity.resolvedOutcome ?? getResolvedOutcomeId(market);
                 const dbStatus = activity.status;
+                const hasFinalDbStatus = dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED';
+                const hasFinalMarketState = market.state === 'RESOLVED' || market.state === 'UNDETERMINED';
+                const canUseResolvedOutcome = hasFinalDbStatus || hasFinalMarketState;
+                const resolvedOutcomeId = canUseResolvedOutcome
+                    ? activity.resolvedOutcome ?? getResolvedOutcomeId(market)
+                    : undefined;
                 const hasPerBetResolution = inferredOutcome !== undefined && resolvedOutcomeId !== undefined;
-                const isResolved = dbStatus === 'WIN' || dbStatus === 'LOSE' || dbStatus === 'CLAIMED' || market.state === 'RESOLVED' || market.state === 'UNDETERMINED' || resolvedOutcomeId !== undefined || Boolean(aggregatePosition?.claimed) || Boolean(aggregatePosition?.positionValue && aggregatePosition.positionValue > 0);
+                const isResolved = hasFinalDbStatus || hasFinalMarketState || hasPerBetResolution;
                 const betWon = hasPerBetResolution
                     ? inferredOutcome === resolvedOutcomeId
                     : dbStatus === 'WIN' || dbStatus === 'CLAIMED';

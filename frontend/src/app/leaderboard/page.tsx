@@ -33,7 +33,7 @@ function LeaderboardRow({ entry, isMe = false, mode }: { entry: LeaderboardEntry
     return (
         <div style={{
             display: 'grid',
-            gridTemplateColumns: '52px minmax(0,1fr) 110px 96px',
+            gridTemplateColumns: '52px minmax(0,1fr) 120px',
             gap: 14,
             alignItems: 'center',
             padding: '14px 16px',
@@ -70,13 +70,6 @@ function LeaderboardRow({ entry, isMe = false, mode }: { entry: LeaderboardEntry
                     {primaryValue}
                 </div>
                 <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>{mode === 'pnl' ? 'PNL' : 'Volume'}</div>
-            </div>
-
-            <div style={{ textAlign: 'right' }}>
-                <div style={{ fontWeight: 850, color: entry.pnl >= 0n ? 'var(--success)' : 'var(--danger)' }}>
-                    {entry.pnl >= 0n ? '+' : '-'}{formatAmount(entry.pnl)}
-                </div>
-                <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>PNL</div>
             </div>
         </div>
     );
