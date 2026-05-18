@@ -152,10 +152,10 @@ export default function PortfolioPage() {
                 draw,
                 sideB,
                 total: volume,
-                claimed: hasMarketMetadata && position.claimed,
+                claimed: position.claimed,
                 canClaim: userWon && !position.claimed,
                 userWon,
-                positionValue: isResolved ? positionValue : 0,
+                positionValue,
             };
         });
     }, [batchedMarkets, cachedPortfolio]);
