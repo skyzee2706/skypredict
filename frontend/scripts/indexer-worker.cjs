@@ -22,6 +22,11 @@ const BLOCKS_PER_TICK = BigInt(process.env.INDEXER_BLOCKS_PER_TICK || '1000000')
 const LOOP_INTERVAL_MS = Number(process.env.INDEXER_LOOP_INTERVAL_MS || '60000');
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 const STATE_ID = 'main';
+const MARKET_FIELDS = [
+  'question', 'strikePrice', 'endTime', 'bettingEndTime', 'resolved', 'yesPool', 'noPool',
+  'settlementPrice', 'drawPool', 'sideAName', 'drawName', 'sideBName', 'marketType',
+  'winningOutcome', 'result', 'yesPrice'
+];
 const args = new Set(process.argv.slice(2));
 const once = args.has('--once');
 const reset = args.has('--reset');
@@ -155,6 +160,140 @@ async function getMarkets() {
     functionName: 'getAllMarkets',
   });
   return [...markets].map((market) => market.toLowerCase());
+}
+
+function computeMarketState(resolved, bettingEndTime) {
+  if (resolved) return 'RESOLVED';
+  return Math.floor(Date.now() / 1000) < bettingEndTime ? 'ACTIVE' : 'RESOLVING';
+}
+
+function inferDuration(question) {
+  const q = question.toLowerCase();
+  if (q.includes('midnight') || q.includes('daily')) return 24 * 60 * 60;
+  if (q.includes(' vs ')) return 5 * 24 * 60 * 60;
+  return 60 * 60;
+}
+
+function inferTicker(question) {
+  const tickers = ['BTC', 'ETH', 'SOL', 'XRP', 'DOGE', 'BNB'];
+  const q = question.toUpperCase();
+  return tickers.find((ticker) => q.includes(`${ticker}/USD`) || q.includes(ticker)) || 'BTC';
+}
+
+function detectMarketKind(question, marketTypeRaw) {
+  const mt = String(marketTypeRaw || '').toUpperCase();
+  if (mt === 'POLITICS') return { type: 'politics', category: 'POLITICS' };
+  if (mt === 'SPORTS') return { type: 'sport', category: 'SPORTS' };
+  if (mt === 'CRYPTO') return { type: 'crypto', category: 'CRYPTO' };
+  if (question.includes(' vs ')) return { type: 'sport', category: 'SPORTS' };
+  return { type: 'crypto', category: 'CRYPTO' };
+}
+
+async function readMarketField(market, functionName, fallback) {
+  return client.readContract({
+    address: market,
+    abi: MarketArtifact.abi,
+    functionName,
+  }).catch(() => fallback);
+}
+
+function buildActiveMarketRow(market, values) {
+  const question = String(values[0] || '');
+  if (!question) return null;
+  const strikePriceRaw = BigInt(values[1] || 0n);
+  const endTime = Number(values[2] || 0n);
+  const bettingEndTime = Number(values[3] || 0n);
+  const resolved = Boolean(values[4]);
+  const yesPoolRaw = BigInt(values[5] || 0n);
+  const noPoolRaw = BigInt(values[6] || 0n);
+  const settlementPriceRaw = BigInt(values[7] || 0n);
+  const drawPoolRaw = BigInt(values[8] || 0n);
+  const sideAName = String(values[9] || 'YES');
+  const drawName = String(values[10] || 'Draw');
+  const sideBName = String(values[11] || 'NO');
+  const marketTypeRaw = String(values[12] || '');
+  const winningOutcome = Number(values[13] || 0);
+  const resultRaw = Boolean(values[14]);
+  const yesPriceRaw = BigInt(values[15] || 0n);
+  const { type, category } = detectMarketKind(question, marketTypeRaw);
+  const isSport = category === 'SPORTS';
+  const isPolitics = category === 'POLITICS';
+  const sideAPool = Number(yesPoolRaw) / 1e18;
+  const drawPool = Number(drawPoolRaw) / 1e18;
+  const sideBPool = Number(noPoolRaw) / 1e18;
+  const totalVolume = sideAPool + drawPool + sideBPool;
+  let probYes;
+  let probDraw;
+  let probNo;
+  if (totalVolume > 0) {
+    probYes = sideAPool / totalVolume;
+    probDraw = drawPool / totalVolume;
+    probNo = sideBPool / totalVolume;
+  } else if (isSport || isPolitics) {
+    probYes = 0.4; probDraw = 0.2; probNo = 0.4;
+  } else {
+    const yp = Number(yesPriceRaw) / 1e16;
+    probYes = yp > 0 && yp <= 100 ? yp / 100 : 0.5;
+    probDraw = 0;
+    probNo = 1 - probYes;
+  }
+  let resolvedOutcome = null;
+  if (resolved) {
+    resolvedOutcome = winningOutcome === 1 ? drawName : winningOutcome === 2 ? sideBName : sideAName;
+    if (!marketTypeRaw && winningOutcome === 0) resolvedOutcome = resultRaw ? sideAName : sideBName;
+  }
+  const duration = inferDuration(question);
+  const ticker = (isSport || isPolitics) ? (isSport ? 'SPORT' : 'POLITICS') : inferTicker(question);
+  return {
+    market_address: normalize(market),
+    title: question,
+    ticker,
+    category,
+    market_type: type,
+    identifier: (isSport || isPolitics) ? question.replace(/\s+/g, '-').toLowerCase() : `${ticker}USDT`,
+    side_a_name: sideAName,
+    draw_name: drawName,
+    side_b_name: sideBName,
+    description: isPolitics ? 'Political prediction market — resolved manually by admin.' : isSport ? 'Football match — market closes at kickoff.' : 'Resolves via median of 10 exchange prices at market close.',
+    strike_price: (isSport || isPolitics) ? null : Number(strikePriceRaw) / 1e8,
+    deadline: endTime,
+    betting_end_time: bettingEndTime,
+    creation_date: Math.max(0, endTime - duration),
+    resolution_source: isPolitics ? 'Admin manual' : isSport ? 'Live score API' : 'Median 10 exchanges',
+    resolution_rule: isPolitics ? 'Resolved manually by platform admin based on real-world outcome.' : isSport ? `${sideAName} wins if they win, ${drawName} if level, ${sideBName} if they win.` : `${sideAName} wins when price >= strike at close.`,
+    liquidity: totalVolume,
+    volume: totalVolume,
+    state: computeMarketState(resolved, bettingEndTime),
+    resolved_outcome: resolvedOutcome,
+    deadline_price: !(isSport || isPolitics) && resolved ? Number(settlementPriceRaw) / 1e8 : null,
+    price_symbol: (isSport || isPolitics) ? '' : '$',
+    prob_yes: probYes,
+    prob_draw: probDraw,
+    prob_no: probNo,
+    percent_change: 0,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function syncActiveMarkets(markets) {
+  const rows = [];
+  const resolvedMarkets = [];
+  for (const market of markets) {
+    const values = await Promise.all(MARKET_FIELDS.map((field) => readMarketField(market, field, field === 'resolved' || field === 'result' ? false : field === 'question' || field.endsWith('Name') || field === 'marketType' ? '' : 0n)));
+    const row = buildActiveMarketRow(market, values);
+    if (!row) continue;
+    if (row.state === 'RESOLVED') resolvedMarkets.push(row.market_address);
+    else rows.push(row);
+  }
+  if (rows.length) {
+    const { error } = await supabase.from('active_markets').upsert(rows, { onConflict: 'market_address' });
+    if (error) throw error;
+  }
+  if (resolvedMarkets.length) {
+    const { error } = await supabase.from('active_markets').delete().in('market_address', resolvedMarkets);
+    if (error) throw error;
+  }
+  console.log(`[indexer] active markets upserted=${rows.length}, removed_resolved=${resolvedMarkets.length}`);
 }
 
 function pushActivity(user, activity, indexedActivityKeys, txMarketKeys) {
@@ -460,6 +599,7 @@ async function tick() {
   }
 
   console.log(`[indexer] markets=${markets.length}, scanning ${fromBlock}-${targetBlock} / latest ${latest}`);
+  await syncActiveMarkets(markets);
   const { users, indexedActivityKeys, txMarketKeys } = await readExistingUsers();
   await scanRouterBets(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
   await scanTransfers(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);

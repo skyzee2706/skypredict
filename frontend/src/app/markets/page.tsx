@@ -8,7 +8,7 @@ import MarketCard from '../components/MarketCard/MarketCard';
 import MarketDetailPanel from '../components/MarketDetailPanel/MarketDetailPanel';
 import styles from '../page.module.css';
 import { MarketState, MarketData } from '../../data/markets';
-import { useFactoryMarkets, useBatchedMarkets } from '../../hooks/useMarketBatches';
+import { useIndexedMarkets } from '../../hooks/useIndexedMarkets';
 import { useToast } from '../providers/ToastProvider';
 
 export default function MarketsPage() {
@@ -19,11 +19,10 @@ export default function MarketsPage() {
     const [activeCategory, setActiveCategory] = useState('All'); // UI category, not used for fetching
     const [activeMarketState, setActiveMarketState] = useState<MarketState>('ACTIVE');
     const [now, setNow] = useState(() => Math.floor(Date.now() / 1000));
-    const { addresses, error: factoryError } = useFactoryMarkets();
-    const { markets: batchedMarkets, isLoading: isBatchLoading, error: batchError } = useBatchedMarkets(addresses);
+    const { markets: indexedMarkets, isLoading: isMarketsLoading, error: marketsError } = useIndexedMarkets();
     const allMarkets = React.useMemo(
-        () => (batchedMarkets.length > 0 ? batchedMarkets : []),
-        [batchedMarkets]
+        () => (indexedMarkets.length > 0 ? indexedMarkets : []),
+        [indexedMarkets]
     );
 
     useEffect(() => {
@@ -39,12 +38,11 @@ export default function MarketsPage() {
     };
 
     useEffect(() => {
-        const error = factoryError || batchError;
-        if (error && allMarkets.length === 0) {
-            console.error('Failed to load markets:', error);
+        if (marketsError && allMarkets.length === 0) {
+            console.error('Failed to load indexed markets:', marketsError);
             showToast('Failed to load markets. Please try again.', 'error');
         }
-    }, [factoryError, batchError, allMarkets.length, showToast]);
+    }, [marketsError, allMarkets.length, showToast]);
 
     // Derived state for currently filtered markets
     const currentMarkets = React.useMemo(() => {
@@ -100,7 +98,7 @@ export default function MarketsPage() {
             return aTime - bTime;
         });
 
-    const isGridLoading = allMarkets.length === 0 && isBatchLoading;
+    const isGridLoading = allMarkets.length === 0 && isMarketsLoading;
     const isEmpty = !isGridLoading && filteredMarkets.length === 0;
 
     return (

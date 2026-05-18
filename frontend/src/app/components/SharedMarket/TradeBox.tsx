@@ -375,6 +375,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
                                 showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
                                 await fetchTokenBalance();
                                 window.dispatchEvent(new Event('skyusd:balance-refresh'));
+                                window.dispatchEvent(new Event('skypredict:markets-refresh'));
                                 setAmount('');
                             } catch (error: unknown) {
                                 console.error('Failed to place bet:', error);
