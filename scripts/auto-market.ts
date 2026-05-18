@@ -28,7 +28,9 @@ if (!PRIVATE_KEY || !FACTORY_ADDRESS) {
 const FACTORY_ABI = [
   'function createMarket(string memory question, uint256 strikePrice, uint256 endTime, uint256 bettingEndTime) external returns (address)',
   'function createMarketWithOutcomes(string memory question,string memory sideAName,string memory drawName,string memory sideBName,string memory marketType,uint256 strikePrice,uint256 endTime,uint256 bettingEndTime) external returns (address)',
-  'function getAllMarkets() external view returns (address[])'
+  'function getAllMarkets() external view returns (address[])',
+  'function getMarkets(uint256 offset,uint256 limit) external view returns (address[])',
+  'function marketCount() external view returns (uint256)'
 ];
 
 const MARKET_ABI = [
@@ -81,6 +83,35 @@ async function sendCreateMarketTx(factory: ethers.Contract, question: string, st
   const data = factory.interface.encodeFunctionData('createMarket', [question, strike, endTime, bettingEndTime]);
   const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 5_000_000n));
   await tx.wait();
+}
+
+async function getFactoryMarkets(factory: ethers.Contract): Promise<string[]> {
+  try {
+    const countRaw = await factory.marketCount();
+    const total = Number(countRaw);
+    const pageSize = Number(process.env.AUTO_MARKET_PAGE_SIZE || '100');
+    const pages: Promise<string[]>[] = [];
+    for (let offset = 0; offset < total; offset += pageSize) {
+      pages.push(factory.getMarkets(offset, pageSize));
+    }
+    const results = await Promise.all(pages);
+    return results.flat();
+  } catch {
+    return (await factory.getAllMarkets()) as string[];
+  }
+}
+
+async function getLatestFactoryMarket(factory: ethers.Contract): Promise<string | null> {
+  try {
+    const countRaw = await factory.marketCount();
+    const total = Number(countRaw);
+    if (total <= 0) return null;
+    const page = (await factory.getMarkets(total - 1, 1)) as string[];
+    return page[0] || null;
+  } catch {
+    const markets = (await factory.getAllMarkets()) as string[];
+    return markets[markets.length - 1] || null;
+  }
 }
 
 async function sendCreateSportsMarketTx(factory: ethers.Contract, fixture: TrackedFixture) {
@@ -464,8 +495,9 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
       continue;
     }
     await sendCreateSportsMarketTx(factory, fixture);
-    const after = (await factory.getAllMarkets()) as string[];
-    state[key] = { ...fixture, marketAddress: after[after.length - 1], createdAt: new Date().toISOString() };
+    const latestMarket = await getLatestFactoryMarket(factory);
+    if (!latestMarket) throw new Error(`Could not read newly created market for fixture ${fixture.fixtureId}`);
+    state[key] = { ...fixture, marketAddress: latestMarket, createdAt: new Date().toISOString() };
     writeSportsState(state);
   }
 
@@ -532,7 +564,7 @@ async function resolveMarkets() {
     const balance = await provider.getBalance(signer.address);
     console.log(`\n[SWEEP] Balance: ${ethers.formatEther(balance)} RITUAL | ${new Date().toISOString()}`);
     const factory = new ethers.Contract(FACTORY_ADDRESS, FACTORY_ABI, signer);
-    const allMarkets = (await factory.getAllMarkets()) as string[];
+    const allMarkets = await getFactoryMarkets(factory);
     const recent = allMarkets.slice(-500);
     const now = Math.floor(Date.now() / 1000);
 

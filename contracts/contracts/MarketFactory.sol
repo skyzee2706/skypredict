@@ -17,6 +17,7 @@ contract MarketFactory is Ownable {
     address public routerAddress;
 
     address[] public markets;
+    mapping(address => bool) public isMarket;
 
     event MarketCreated(
         address indexed market,
@@ -114,6 +115,7 @@ contract MarketFactory is Ownable {
         );
 
         markets.push(clone);
+        isMarket[clone] = true;
 
         // Auto-configure router on new market if set
         if (routerAddress != address(0)) {
@@ -136,6 +138,24 @@ contract MarketFactory is Ownable {
 
     function getAllMarkets() external view returns (address[] memory) {
         return markets;
+    }
+
+    function getMarkets(uint256 offset, uint256 limit) external view returns (address[] memory) {
+        uint256 total = markets.length;
+        if (offset >= total || limit == 0) {
+            return new address[](0);
+        }
+
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+
+        address[] memory page = new address[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            page[i - offset] = markets[i];
+        }
+        return page;
     }
 
     function marketCount() external view returns (uint256) {

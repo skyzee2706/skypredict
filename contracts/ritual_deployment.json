@@ -4,11 +4,12 @@
   "rpcUrl": "https://rpc.ritualfoundation.org",
   "explorerUrl": "https://explorer.ritualfoundation.org",
   "owner": "0x0000069F157d774273D95b0909D41bb220A4dC7d",
-  "token": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
-  "skyUsd": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
+  "token": "0x08846DcA87941264bCC9DF2b32499265b3517414",
+  "skyUsd": "0x08846DcA87941264bCC9DF2b32499265b3517414",
   "usdl": "0x10008b723858b633dAb15eFd81b8a83e61dafbB1",
   "btcOracle": "0x035A0D40e89B3847c40DAbF1f44eD200b91C50dc",
   "ethOracle": "0x532446181AE940AF4B88D05CD4628BaBE65C702f",
-  "factory": "0x81aD70855601C1b49B1A7BAe794df8626DC1fB55",
-  "timestamp": "2026-05-07T17:37:38.115Z"
+  "factory": "0xdA5010F4B80F2D612D9E7d4619eC31B3CBA2a044",
+  "timestamp": "2026-05-18T15:26:23.698Z",
+  "router": "0xFCDda606403CB071f2498A9BB55A497ab013DE08"
 }

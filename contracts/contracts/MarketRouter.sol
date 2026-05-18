@@ -38,7 +38,7 @@ contract MarketRouter {
         uint256 amount
     ) external {
         require(amount > 0, "Router: amount must be > 0");
-        require(_isValidMarket(marketAddress), "Router: invalid market");
+        require(factory.isMarket(marketAddress), "Router: invalid market");
 
         PredictionMarket market = PredictionMarket(marketAddress);
 
@@ -52,16 +52,5 @@ contract MarketRouter {
         market.placeBetFor(msg.sender, outcome, amount);
 
         emit BetRouted(msg.sender, marketAddress, outcome, amount);
-    }
-
-    /**
-     * @notice Check if a market address is registered in the Factory.
-     */
-    function _isValidMarket(address marketAddress) internal view returns (bool) {
-        address[] memory allMarkets = factory.getAllMarkets();
-        for (uint256 i = 0; i < allMarkets.length; i++) {
-            if (allMarkets[i] == marketAddress) return true;
-        }
-        return false;
     }
 }

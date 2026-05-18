@@ -184,7 +184,7 @@ contract PredictionMarket is Initializable, OwnableUpgradeable {
      * @notice Place a bet on behalf of a user. Only callable by the Router.
      *         Tokens must already be transferred to this contract by the Router.
      */
-    function placeBetFor(address user, Outcome outcome, uint256 amount) external {
+    function placeBetFor(address user, Outcome outcome, uint256 amount) external beforeEnd {
         require(msg.sender == router, "Only router");
         require(amount > 0, "Amount must be > 0");
 

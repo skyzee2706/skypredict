@@ -154,6 +154,28 @@ async function readExistingUsers() {
 }
 
 async function getMarkets() {
+  const count = await client.readContract({
+    address: FACTORY_ADDRESS,
+    abi: FactoryArtifact.abi,
+    functionName: 'marketCount',
+  }).catch(() => null);
+
+  if (count !== null && count !== undefined) {
+    const total = Number(count);
+    const pageSize = Number(process.env.INDEXER_MARKET_PAGE_SIZE || '100');
+    const pages = [];
+    for (let offset = 0; offset < total; offset += pageSize) {
+      pages.push(client.readContract({
+        address: FACTORY_ADDRESS,
+        abi: FactoryArtifact.abi,
+        functionName: 'getMarkets',
+        args: [BigInt(offset), BigInt(pageSize)],
+      }));
+    }
+    const results = await Promise.all(pages);
+    return results.flat().map((market) => market.toLowerCase());
+  }
+
   const markets = await client.readContract({
     address: FACTORY_ADDRESS,
     abi: FactoryArtifact.abi,
@@ -588,18 +610,21 @@ async function tick() {
   if (reset) await resetTables();
   const latest = await client.getBlockNumber();
   const markets = await getMarkets();
+
+  console.log(`[indexer] markets=${markets.length}, refreshing active market cache`);
+  await syncActiveMarkets(markets);
+
   let last = explicitFromBlock !== null ? explicitFromBlock - 1n : await getState();
   if (last <= 0n) last = START_BLOCK - 1n;
   const fromBlock = last + 1n;
   const targetBlock = fromBlock + BLOCKS_PER_TICK - 1n > latest ? latest : fromBlock + BLOCKS_PER_TICK - 1n;
 
   if (fromBlock > latest) {
-    console.log(`[indexer] up to date at ${last}`);
+    console.log(`[indexer] event scan up to date at ${last}`);
     return;
   }
 
-  console.log(`[indexer] markets=${markets.length}, scanning ${fromBlock}-${targetBlock} / latest ${latest}`);
-  await syncActiveMarkets(markets);
+  console.log(`[indexer] scanning events ${fromBlock}-${targetBlock} / latest ${latest}`);
   const { users, indexedActivityKeys, txMarketKeys } = await readExistingUsers();
   await scanRouterBets(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
   await scanTransfers(markets, fromBlock, targetBlock, users, indexedActivityKeys, txMarketKeys);
