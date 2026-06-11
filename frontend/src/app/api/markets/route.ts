@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { NO_STORE_HEADERS } from '../../../lib/api/noStore';
 import { getSupabaseAdmin, isSupabaseConfigured } from '../../../lib/supabase/server';
 import { rowToMarketData } from '../../../lib/indexer/marketRows';
+import { dedupeMarketsByEvent } from '../../../lib/markets/marketMath';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,8 +20,10 @@ export async function GET() {
 
     if (error) throw error;
 
+    const dedupedRows = dedupeMarketsByEvent(data || []);
+
     return NextResponse.json({
-      markets: (data || []).map(rowToMarketData),
+      markets: dedupedRows.map(rowToMarketData),
       source: 'supabase',
       updatedAt: new Date().toISOString(),
     }, { headers: NO_STORE_HEADERS });

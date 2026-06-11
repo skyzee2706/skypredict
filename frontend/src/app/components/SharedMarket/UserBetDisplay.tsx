@@ -22,6 +22,13 @@ interface UserBetData {
     claimed?: boolean;
 }
 
+type OptimisticPositionDetail = {
+    marketAddress: string;
+    userAddress: string;
+    outcome: 'YES' | 'DRAW' | 'NO';
+    amount: number;
+};
+
 const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full' }) => {
     void variant;
     const { isConnected, walletAddress } = useWallet();
@@ -55,6 +62,40 @@ const UserBetDisplay: React.FC<UserBetDisplayProps> = ({ market, variant = 'full
     React.useEffect(() => {
         fetchUserBetData();
     }, [fetchUserBetData]);
+
+    React.useEffect(() => {
+        const handleOptimisticBet = (event: Event) => {
+            const detail = (event as CustomEvent<OptimisticPositionDetail>).detail;
+            if (!detail || !walletAddress) return;
+            if (detail.marketAddress.toLowerCase() !== market.contractId.toLowerCase()) return;
+            if (detail.userAddress.toLowerCase() !== walletAddress.toLowerCase()) return;
+
+            setBetData((previous) => {
+                const current = previous ?? {
+                    onSideA: 0,
+                    onSideB: 0,
+                    onDraw: 0,
+                    ifSideAWins: 0,
+                    ifSideBWins: 0,
+                    ifDrawWins: 0,
+                    claimed: false,
+                };
+                const next = { ...current };
+                if (detail.outcome === 'YES') next.onSideA += detail.amount;
+                else if (detail.outcome === 'DRAW') next.onDraw = (next.onDraw || 0) + detail.amount;
+                else next.onSideB += detail.amount;
+                next.ifSideAWins = next.onSideA;
+                next.ifDrawWins = next.onDraw || 0;
+                next.ifSideBWins = next.onSideB;
+                next.claimed = false;
+                return next;
+            });
+            setLoading(false);
+        };
+
+        window.addEventListener('skypredict:user-position-optimistic-bet', handleOptimisticBet);
+        return () => window.removeEventListener('skypredict:user-position-optimistic-bet', handleOptimisticBet);
+    }, [market.contractId, walletAddress]);
 
     const handleClaim = async () => {
         if (!market.contractId || !betData) return;

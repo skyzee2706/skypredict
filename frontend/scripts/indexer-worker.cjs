@@ -335,25 +335,72 @@ function buildActiveMarketRow(market, values) {
   };
 }
 
+function normalizeMarketTitle(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function marketEventKey(row) {
+  return `${String(row.category || 'UNKNOWN').toUpperCase()}|${normalizeMarketTitle(row.title)}|${String(row.deadline || '0')}`;
+}
+
+function activeRowVolume(row) {
+  const parsed = Number(row.volume || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function isPreferredActiveRow(candidate, current) {
+  const candidateVolume = activeRowVolume(candidate);
+  const currentVolume = activeRowVolume(current);
+  if (candidateVolume !== currentVolume) return candidateVolume > currentVolume;
+  return Number(candidate._factory_index || 0) < Number(current._factory_index || 0);
+}
+
+function dedupeActiveMarketRows(rows) {
+  const byEvent = new Map();
+  const duplicateAddresses = new Set();
+  for (const row of rows) {
+    const key = marketEventKey(row);
+    const existing = byEvent.get(key);
+    if (!existing) {
+      byEvent.set(key, row);
+      continue;
+    }
+
+    if (isPreferredActiveRow(row, existing)) {
+      duplicateAddresses.add(existing.market_address);
+      byEvent.set(key, row);
+    } else {
+      duplicateAddresses.add(row.market_address);
+    }
+  }
+
+  return {
+    rows: [...byEvent.values()].map(({ _factory_index, ...row }) => row),
+    duplicateAddresses: [...duplicateAddresses],
+  };
+}
+
 async function syncActiveMarkets(markets) {
   const rows = [];
   const resolvedMarkets = [];
-  for (const market of markets) {
+  for (const [index, market] of markets.entries()) {
     const values = await Promise.all(MARKET_FIELDS.map((field) => readMarketField(market, field, field === 'resolved' || field === 'result' ? false : field === 'question' || field.endsWith('Name') || field === 'marketType' ? '' : 0n)));
     const row = buildActiveMarketRow(market, values);
     if (!row) continue;
     if (row.state === 'RESOLVED') resolvedMarkets.push(row.market_address);
-    else rows.push(row);
+    else rows.push({ ...row, _factory_index: index });
   }
-  if (rows.length) {
-    const { error } = await supabase.from('active_markets').upsert(rows, { onConflict: 'market_address' });
+  const deduped = dedupeActiveMarketRows(rows);
+  if (deduped.rows.length) {
+    const { error } = await supabase.from('active_markets').upsert(deduped.rows, { onConflict: 'market_address' });
     if (error) throw error;
   }
-  if (resolvedMarkets.length) {
-    const { error } = await supabase.from('active_markets').delete().in('market_address', resolvedMarkets);
+  const removableMarkets = [...new Set([...resolvedMarkets, ...deduped.duplicateAddresses])];
+  if (removableMarkets.length) {
+    const { error } = await supabase.from('active_markets').delete().in('market_address', removableMarkets);
     if (error) throw error;
   }
-  console.log(`[indexer] active markets upserted=${rows.length}, removed_resolved=${resolvedMarkets.length}`);
+  console.log(`[indexer] active markets upserted=${deduped.rows.length}, removed_resolved=${resolvedMarkets.length}, removed_duplicates=${deduped.duplicateAddresses.length}`);
 }
 
 function pushActivity(user, activity, indexedActivityKeys, txMarketKeys) {

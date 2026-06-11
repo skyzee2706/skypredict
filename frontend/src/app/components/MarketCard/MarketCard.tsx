@@ -63,15 +63,21 @@ const MarketCard: React.FC<MarketCardProps> = ({
 
     const { isConnected, walletAddress } = useWallet();
     const { showToast } = useToast();
+    const marketRef = React.useRef(market);
 
     // Get user market status if we have market data and wallet connected
     const [userStatus, setUserStatus] = React.useState<UserMarketStatus | null>(null);
 
     React.useEffect(() => {
+        marketRef.current = market;
+    }, [market]);
+
+    React.useEffect(() => {
         const fetchUserStatus = async () => {
-            if (market && isConnected && walletAddress && market.contractId) {
+            const currentMarket = marketRef.current;
+            if (currentMarket && isConnected && walletAddress && currentMarket.contractId) {
                 try {
-                    const status = await getUserMarketStatus(market.contractId, walletAddress, market);
+                    const status = await getUserMarketStatus(currentMarket.contractId, walletAddress, currentMarket);
                     setUserStatus(status);
                 } catch (error) {
                     console.error('Error fetching user status:', error);
@@ -83,7 +89,7 @@ const MarketCard: React.FC<MarketCardProps> = ({
         };
 
         fetchUserStatus();
-    }, [market, isConnected, walletAddress]);
+    }, [market?.contractId, market?.state, market?.resolvedOutcome, isConnected, walletAddress]);
 
     // --- Countdown (simple, using raw end date) ---
     const hasNow = typeof now === 'number';

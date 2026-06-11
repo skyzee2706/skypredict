@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MarketData } from '../data/markets';
+import { applyOptimisticBetToMarket, type MarketOutcomeSide } from '../lib/markets/marketMath';
 
 type IndexedMarketsState = {
   markets: MarketData[];
@@ -12,6 +13,12 @@ type IndexedMarketsState = {
 
 type IndexedMarketsResponse = {
   markets?: MarketData[];
+};
+
+type OptimisticBetDetail = {
+  marketAddress: string;
+  outcome: MarketOutcomeSide;
+  amount: number;
 };
 
 export function useIndexedMarkets(refetchInterval = 7_500) {
@@ -52,11 +59,27 @@ export function useIndexedMarkets(refetchInterval = 7_500) {
     void refetch();
     const id = window.setInterval(() => void refetch(), refetchInterval);
     const refresh = () => void refetch();
+    const optimisticBet = (event: Event) => {
+      const detail = (event as CustomEvent<OptimisticBetDetail>).detail;
+      if (!detail?.marketAddress || !detail.outcome || !Number.isFinite(Number(detail.amount))) return;
+      const target = detail.marketAddress.toLowerCase();
+      setState((previous) => ({
+        ...previous,
+        markets: previous.markets.map((market) => {
+          const id = String(market.id || '').toLowerCase();
+          const contractId = String(market.contractId || '').toLowerCase();
+          if (id !== target && contractId !== target) return market;
+          return applyOptimisticBetToMarket(market, detail.outcome, Number(detail.amount));
+        }),
+      }));
+    };
     window.addEventListener('skypredict:markets-refresh', refresh);
+    window.addEventListener('skypredict:market-optimistic-bet', optimisticBet);
     return () => {
       mountedRef.current = false;
       window.clearInterval(id);
       window.removeEventListener('skypredict:markets-refresh', refresh);
+      window.removeEventListener('skypredict:market-optimistic-bet', optimisticBet);
     };
   }, [refetch, refetchInterval]);
 

@@ -114,7 +114,7 @@ async function getLatestFactoryMarket(factory: ethers.Contract): Promise<string 
   }
 }
 
-async function sendCreateSportsMarketTx(factory: ethers.Contract, fixture: TrackedFixture) {
+async function sendCreateSportsMarketTx(factory: ethers.Contract, fixture: TrackedFixture, onSubmitted?: (hash: string) => void) {
   const question = `${fixture.homeTeam} vs ${fixture.awayTeam}`;
   const data = factory.interface.encodeFunctionData('createMarketWithOutcomes', [
     question,
@@ -127,6 +127,8 @@ async function sendCreateSportsMarketTx(factory: ethers.Contract, fixture: Track
     fixture.kickoff
   ]);
   const tx = await signer.sendTransaction(await buildManualTx(String(factory.target), data, 5_000_000n));
+  console.log(`[SPORT] Submitted ${question} | tx=${tx.hash}`);
+  onSubmitted?.(tx.hash);
   const receipt = await tx.wait();
   console.log(`[SPORT] Created ${question} | tx=${receipt?.hash}`);
 }
@@ -255,6 +257,7 @@ const DOMESTIC_COMPETITIONS = new Set(Object.keys(TOP_FIVE_TEAMS_BY_COMPETITION)
 const UCL_COMPETITIONS = new Set(['CL', 'UCL', 'WC']);
 const SPORTS_DISCOVERY_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const SPORTS_RESOLVE_SCAN_INTERVAL_MS = 10 * 60 * 1000;
+const SPORTS_PENDING_CREATE_TIMEOUT_MS = 30 * 60 * 1000;
 const CRYPTO_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 let lastSportsDiscoveryAt = 0;
 let cachedSportsFixtures: TrackedFixture[] = [];
@@ -269,6 +272,7 @@ interface TrackedFixture {
   status?: string;
   homeGoals?: number | null;
   awayGoals?: number | null;
+  pendingTxHash?: string;
   createdAt?: string;
   resolvedAt?: string;
   nextCheckAt?: number;
@@ -359,6 +363,14 @@ async function fetchMatchResult(fixture: TrackedFixture): Promise<{ status: stri
 
 function normalizeQuestion(value: string) {
   return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function sportsMarketKey(question: string, kickoff: string | number | bigint) {
+  return `${normalizeQuestion(question)}|${String(kickoff)}`;
+}
+
+function fixtureMarketKey(fixture: TrackedFixture) {
+  return sportsMarketKey(`${fixture.homeTeam} vs ${fixture.awayTeam}`, fixture.kickoff);
 }
 
 async function findFixtureByTeams(homeTeam: string, awayTeam: string, kickoff: number): Promise<TrackedFixture | null> {
@@ -472,13 +484,14 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
   for (const addr of allMarkets.slice(-1000)) {
     try {
       const m = new ethers.Contract(addr, MARKET_ABI, provider);
-      const [question, type, resolved] = await Promise.all([
+      const [question, type, resolved, endTime] = await Promise.all([
         m.question(),
         m.marketType().catch(() => 'CRYPTO'),
-        m.resolved()
+        m.resolved(),
+        m.endTime().catch(() => 0n)
       ]);
       if (String(type).toUpperCase() === 'SPORTS' && !resolved) {
-        existingQuestions.set(normalizeQuestion(String(question)), addr);
+        existingQuestions.set(sportsMarketKey(String(question), endTime), addr);
       }
     } catch { }
   }
@@ -486,7 +499,7 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
   for (const fixture of fixtures) {
     const key = String(fixture.fixtureId);
     const question = `${fixture.homeTeam} vs ${fixture.awayTeam}`;
-    const existingAddress = existingQuestions.get(normalizeQuestion(question));
+    const existingAddress = existingQuestions.get(fixtureMarketKey(fixture));
     if (state[key]?.marketAddress) continue;
     if (existingAddress) {
       state[key] = { ...fixture, marketAddress: existingAddress, createdAt: new Date().toISOString() };
@@ -494,11 +507,31 @@ async function runSportsAutomation(factory: ethers.Contract, allMarkets: string[
       writeSportsState(state);
       continue;
     }
-    await sendCreateSportsMarketTx(factory, fixture);
-    const latestMarket = await getLatestFactoryMarket(factory);
-    if (!latestMarket) throw new Error(`Could not read newly created market for fixture ${fixture.fixtureId}`);
-    state[key] = { ...fixture, marketAddress: latestMarket, createdAt: new Date().toISOString() };
-    writeSportsState(state);
+    if (state[key]?.pendingTxHash) {
+      const pendingAge = Date.now() - Date.parse(state[key].createdAt || '');
+      if (Number.isFinite(pendingAge) && pendingAge < SPORTS_PENDING_CREATE_TIMEOUT_MS) {
+        console.log(`[SPORT] Pending create already submitted for ${question} | tx=${state[key].pendingTxHash}`);
+        continue;
+      }
+      console.warn(`[SPORT] Pending create expired for ${question}; retrying.`);
+      delete state[key];
+      writeSportsState(state);
+    }
+    try {
+      await sendCreateSportsMarketTx(factory, fixture, (hash) => {
+        state[key] = { ...fixture, pendingTxHash: hash, createdAt: new Date().toISOString() };
+        writeSportsState(state);
+      });
+      const latestMarket = await getLatestFactoryMarket(factory);
+      if (!latestMarket) throw new Error(`Could not read newly created market for fixture ${fixture.fixtureId}`);
+      state[key] = { ...fixture, marketAddress: latestMarket, createdAt: state[key]?.createdAt || new Date().toISOString() };
+      writeSportsState(state);
+      existingQuestions.set(fixtureMarketKey(fixture), latestMarket);
+    } catch (err: any) {
+      console.error(`[SPORT] Create failed for ${question}:`, err?.shortMessage || err?.message || err);
+      writeSportsState(state);
+      continue;
+    }
   }
 
   for (const [key, tracked] of Object.entries(state)) {

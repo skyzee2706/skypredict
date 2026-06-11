@@ -1,4 +1,4 @@
-import { Abi, createPublicClient, http, parseEther } from 'viem';
+import { Abi, createPublicClient, http, parseEther, type TransactionReceipt } from 'viem';
 import { getAccount, writeContract, switchChain, getChainId } from '@wagmi/core';
 import { seismicTestnet } from './seismicChain';
 import { wagmiConfig } from './wagmiConfig';
@@ -14,12 +14,13 @@ function getPublicClient() {
   });
 }
 
-async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<void> {
+async function waitForConfirmedReceipt(hash: `0x${string}`): Promise<TransactionReceipt> {
   const publicClient = getPublicClient();
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== 'success') {
     throw new Error('Transaction failed on-chain.');
   }
+  return receipt;
 }
 
 async function ensureRitualWallet(): Promise<void> {
@@ -72,7 +73,7 @@ export async function approveRouter(): Promise<void> {
  * Place a bet via the Router. Requires prior approval to Router.
  * This is always a single transaction — no per-market approval needed.
  */
-export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutcome, amount: number): Promise<void> {
+export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutcome, amount: number): Promise<{ hash: `0x${string}`; receipt: TransactionReceipt; amountInUnits: bigint; outcome: MarketOutcome }> {
   await ensureRitualWallet();
   const publicClient = getPublicClient();
   const account = getAccount(wagmiConfig);
@@ -127,7 +128,8 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
     functionName: 'placeBet',
     args: [marketAddress, outcomeEnum, amountInUnits]
   });
-  await waitForConfirmedReceipt(hash);
+  const receipt = await waitForConfirmedReceipt(hash);
+  return { hash, receipt, amountInUnits, outcome };
 }
 
 export async function claimRewards(marketAddress: `0x${string}`): Promise<void> {

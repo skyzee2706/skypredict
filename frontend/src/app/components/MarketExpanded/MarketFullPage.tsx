@@ -12,6 +12,7 @@ import { formatVolume, formatAddress, formatResolutionDate } from '../../../util
 import CopyIcon from '../Shared/CopyIcon';
 import ResolutionRules from '../Shared/ResolutionRules';
 import { useLiveScore } from '../../../hooks/useLiveScore';
+import { shareMarket } from '../../../lib/markets/share';
 
 interface MarketFullPageProps {
     onBack: () => void;
@@ -39,6 +40,7 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
     resolutionRule: legacyResolutionRule = "Standard Rules",
     volume: legacyVolume = 0
 }) => {
+    const marketRef = React.useRef(market);
     // Use market data or fall back to legacy props
     const marketTitle = market?.title || legacyTitle;
     const probability = market ? market.probYes * 100 : legacyProbability;
@@ -51,6 +53,11 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
 
     const { isConnected, walletAddress } = useWallet();
     const { showToast } = useToast();
+
+    React.useEffect(() => {
+        marketRef.current = market;
+    }, [market]);
+
     const isSportsMarket = market?.category === 'SPORTS' || type === 'sport';
     const { liveScore, loading: liveScoreLoading } = useLiveScore(
         isSportsMarket ? market?.sideAName : undefined,
@@ -63,9 +70,10 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
 
     React.useEffect(() => {
         const fetchUserStatus = async () => {
-            if (market && isConnected && walletAddress && market.contractId) {
+            const currentMarket = marketRef.current;
+            if (currentMarket && isConnected && walletAddress && currentMarket.contractId) {
                 try {
-                    const status = await getUserMarketStatus(market.contractId, walletAddress, market);
+                    const status = await getUserMarketStatus(currentMarket.contractId, walletAddress, currentMarket);
                     setUserStatus(status);
                 } catch (error) {
                     console.error('Error fetching user status:', error);
@@ -77,7 +85,7 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
         };
 
         fetchUserStatus();
-    }, [market, isConnected, walletAddress]);
+    }, [market?.contractId, market?.state, market?.resolvedOutcome, isConnected, walletAddress]);
     const finalPriceText = market?.deadlinePrice
         ? `${market.priceSymbol ?? ''}${market.deadlinePrice.toLocaleString()}`
         : null;
@@ -91,7 +99,19 @@ const MarketFullPage: React.FC<MarketFullPageProps> = ({
     const renderTopBar = () => (
         <div className={styles.topBar}>
             <button className={styles.backButton} onClick={onBack}>← Back</button>
-            <button className={styles.backButton}>Share</button>
+            <button
+                className={styles.backButton}
+                onClick={async () => {
+                    if (!market) return;
+                    try {
+                        const mode = await shareMarket(market);
+                        if (mode === 'clipboard') showToast('Market link copied', 'success');
+                    } catch (error) {
+                        console.error('Share failed:', error);
+                        showToast('Unable to share market', 'error');
+                    }
+                }}
+            >Share</button>
         </div>
     );
 

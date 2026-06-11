@@ -17,6 +17,7 @@ interface TradeBoxProps {
 
 const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }) => {
     void _probability;
+    const marketRef = React.useRef(market);
     const [amount, setAmount] = useState<string>('');
     const [selectedOutcome, setSelectedOutcome] = useState<'YES' | 'DRAW' | 'NO'>('YES');
     const [tokenBalance, setTokenBalance] = React.useState<bigint | undefined>(undefined);
@@ -26,6 +27,10 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 
     const { isConnected, walletAddress, connect, isConnecting } = useWallet();
     const { showToast } = useToast();
+
+    React.useEffect(() => {
+        marketRef.current = market;
+    }, [market]);
 
     const fetchTokenBalance = React.useCallback(async () => {
         if (!walletAddress || !isConnected) {
@@ -67,9 +72,10 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 
     React.useEffect(() => {
         const fetchUserStatus = async () => {
-            if (market && isConnected && walletAddress && market.contractId) {
+            const currentMarket = marketRef.current;
+            if (currentMarket && isConnected && walletAddress && currentMarket.contractId) {
                 try {
-                    const status = await getUserMarketStatus(market.contractId, walletAddress, market);
+                    const status = await getUserMarketStatus(currentMarket.contractId, walletAddress, currentMarket);
                     setUserStatus(status);
                 } catch (error) {
                     console.error('Error fetching user status:', error);
@@ -81,7 +87,7 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
         };
 
         fetchUserStatus();
-    }, [market, isConnected, walletAddress]);
+    }, [market?.contractId, market?.state, market?.resolvedOutcome, isConnected, walletAddress]);
 
     const handleClaim = async () => {
         if (!market) return;
@@ -98,6 +104,57 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
     const numericAmount = parseFloat(amount) || 0;
     const amountInUnits = BigInt(Math.floor(numericAmount * SKYUSD_MULTIPLIER));
     const insufficientBalance = tokenBalance ? tokenBalance < amountInUnits : false;
+
+    const persistOptimisticBet = React.useCallback((txHash: string, outcome: 'YES' | 'DRAW' | 'NO', betAmount: number, betAmountInUnits: bigint) => {
+        if (!market?.contractId || !walletAddress) return;
+        void fetch('/api/markets/optimistic-bet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                txHash,
+                marketAddress: market.contractId,
+                userAddress: walletAddress,
+                outcome,
+                amount: betAmount,
+                amountInUnits: betAmountInUnits.toString(),
+            }),
+        }).then((response) => {
+            if (!response.ok) throw new Error(`Optimistic persistence failed: ${response.status}`);
+            window.dispatchEvent(new Event('skypredict:markets-refresh'));
+        }).catch((error) => {
+            console.warn('Optimistic bet persistence failed; indexer will reconcile later:', error);
+        });
+    }, [market?.contractId, walletAddress]);
+
+    const dispatchOptimisticBet = React.useCallback((txHash: string, outcome: 'YES' | 'DRAW' | 'NO', betAmount: number, betAmountInUnits: bigint) => {
+        if (!market?.contractId || !walletAddress) return;
+        const selectedLabel = outcome === 'YES' ? (market.sideAName ?? 'YES') : outcome === 'DRAW' ? (market.drawName ?? 'Draw') : (market.sideBName ?? 'NO');
+        const detail = {
+            txHash,
+            marketAddress: market.contractId,
+            userAddress: walletAddress,
+            outcome,
+            amount: betAmount,
+            outcomeLabel: selectedLabel,
+        };
+        window.dispatchEvent(new CustomEvent('skypredict:market-optimistic-bet', { detail }));
+        window.dispatchEvent(new CustomEvent('skypredict:user-position-optimistic-bet', { detail }));
+        setUserStatus((previous) => ({
+            hasPosition: true,
+            userWon: false,
+            canClaim: false,
+            potentialWinnings: previous?.potentialWinnings ?? 0,
+            position: {
+                amount: previous?.position?.outcome === selectedLabel
+                    ? previous.position.amount + betAmount
+                    : betAmount,
+                outcome: selectedLabel,
+                claimed: false,
+            },
+        }));
+        setTokenBalance((current) => current === undefined ? current : current - BigInt(Math.floor(betAmount * SKYUSD_MULTIPLIER)));
+        persistOptimisticBet(txHash, outcome, betAmount, betAmountInUnits);
+    }, [market, persistOptimisticBet, walletAddress]);
 
     if (market) {
         if (market.state === 'RESOLVED' || market.state === 'UNDETERMINED') {
@@ -363,19 +420,11 @@ const TradeBox: React.FC<TradeBoxProps> = ({ probability: _probability, market }
 
                             setIsPlacingBet(true);
                             try {
-                                const freshMarket = await import('../../../lib/onchain/reads')
-                                    .then(({ fetchMarketInfo }) => fetchMarketInfo(market.contractId as `0x${string}`))
-                                    .catch((error) => {
-                                        console.warn('Fresh market reload before bet failed, using current market state:', error);
-                                        return market;
-                                    });
-                                const tradeMarket = freshMarket?.contractId ? freshMarket : market;
-                                const selectedLabel = selectedOutcome === 'YES' ? (tradeMarket.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (tradeMarket.drawName ?? 'Draw') : (tradeMarket.sideBName ?? 'NO');
-                                await placeBet(tradeMarket.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
+                                const selectedLabel = selectedOutcome === 'YES' ? (market.sideAName ?? 'YES') : selectedOutcome === 'DRAW' ? (market.drawName ?? 'Draw') : (market.sideBName ?? 'NO');
+                                const result = await placeBet(market.contractId as `0x${string}`, selectedOutcome, numericAmount > 0 ? numericAmount : 0);
+                                dispatchOptimisticBet(result.hash, selectedOutcome, numericAmount, result.amountInUnits);
                                 showToast(`Bet placed successfully! ${numericAmount} ${TOKEN_SYMBOL} on ${selectedLabel}.`, 'success');
-                                await fetchTokenBalance();
                                 window.dispatchEvent(new Event('skyusd:balance-refresh'));
-                                window.dispatchEvent(new Event('skypredict:markets-refresh'));
                                 setAmount('');
                             } catch (error: unknown) {
                                 console.error('Failed to place bet:', error);

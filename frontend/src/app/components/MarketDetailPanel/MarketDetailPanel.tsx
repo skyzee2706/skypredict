@@ -12,6 +12,7 @@ import { formatUsdlAmount, formatAddress, formatResolutionDate, formatVolume } f
 import CopyIcon from '../Shared/CopyIcon';
 import ResolutionRules from '../Shared/ResolutionRules';
 import { useLiveScore } from '../../../hooks/useLiveScore';
+import { shareMarket } from '../../../lib/markets/share';
 
 interface MarketDetailPanelProps {
     onClose: () => void;
@@ -41,6 +42,7 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
 }) => {
     const { showToast } = useToast();
     const panelRef = React.useRef<HTMLDivElement>(null);
+    const marketRef = React.useRef(market);
     // Use market data or fall back to legacy props
     const marketTitle = market?.title || legacyTitle;
     const probability = market ? market.probYes * 100 : legacyProbability;
@@ -51,14 +53,19 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
 
     const { isConnected, walletAddress } = useWallet();
 
+    React.useEffect(() => {
+        marketRef.current = market;
+    }, [market]);
+
     // Get user status for finalized markets
     const [userStatus, setUserStatus] = React.useState<UserMarketStatus | null>(null);
 
     React.useEffect(() => {
         const fetchUserStatus = async () => {
-            if (market && isConnected && walletAddress && market.contractId) {
+            const currentMarket = marketRef.current;
+            if (currentMarket && isConnected && walletAddress && currentMarket.contractId) {
                 try {
-                    const status = await getUserMarketStatus(market.contractId, walletAddress, market);
+                    const status = await getUserMarketStatus(currentMarket.contractId, walletAddress, currentMarket);
                     setUserStatus(status);
                 } catch (error) {
                     console.error('Error fetching user status:', error);
@@ -70,7 +77,7 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
         };
 
         fetchUserStatus();
-    }, [market, isConnected, walletAddress]);
+    }, [market?.contractId, market?.state, market?.resolvedOutcome, isConnected, walletAddress]);
 
     // Live score hook for sports markets
     const isSport = market?.category === 'SPORTS';
@@ -132,7 +139,19 @@ const MarketDetailPanel: React.FC<MarketDetailPanelProps> = ({
                     <button className={styles.backButton} onClick={onFullPage}>⛶ Full page</button>
                 )}
             </div>
-            <button className={styles.shareButton}>Share</button>
+            <button
+                className={styles.shareButton}
+                onClick={async () => {
+                    if (!market) return;
+                    try {
+                        const mode = await shareMarket(market);
+                        if (mode === 'clipboard') showToast('Market link copied', 'success');
+                    } catch (error) {
+                        console.error('Share failed:', error);
+                        showToast('Unable to share market', 'error');
+                    }
+                }}
+            >Share</button>
         </div>
     );
 

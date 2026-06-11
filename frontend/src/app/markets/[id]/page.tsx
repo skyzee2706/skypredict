@@ -5,11 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Header from '../../components/Header/Header';
 import MarketFullPage from '../../components/MarketExpanded/MarketFullPage';
 import { MarketData } from '../../../data/markets';
+import { useIndexedMarkets } from '../../../hooks/useIndexedMarkets';
 import styles from '../../page.module.css';
-
-type IndexedMarketsResponse = {
-    markets?: MarketData[];
-};
 
 // src/app/markets/[id]/page.tsx
 // ../ -> src/app/markets
@@ -22,54 +19,28 @@ export default function MarketPage() {
     const router = useRouter();
     const params = useParams();
     const id = params?.id as string;
-
-    const [market, setMarket] = React.useState<MarketData | null>(null);
-    const [loading, setLoading] = React.useState<boolean>(true);
-    const [isInvalidBet, setIsInvalidBet] = React.useState<boolean>(false);
+    const { markets, isLoading } = useIndexedMarkets();
+    const [now, setNow] = React.useState(() => Math.floor(Date.now() / 1000));
 
     React.useEffect(() => {
-        let cancelled = false;
-        const load = async () => {
-            setLoading(true);
-            setIsInvalidBet(false);
-            try {
-                const target = (id || '').toLowerCase();
-                const response = await fetch(`/api/markets?t=${Date.now()}`, { cache: 'no-store' });
-                if (!response.ok) throw new Error(`Market API failed: ${response.status}`);
+        const interval = window.setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
+        return () => window.clearInterval(interval);
+    }, []);
 
-                const payload = (await response.json()) as IndexedMarketsResponse;
-                const markets = Array.isArray(payload.markets) ? payload.markets : [];
-                const nowSec = Math.floor(Date.now() / 1000);
-                const foundRaw = markets.find((m) => {
-                    const cid = (m.contractId || '').toLowerCase();
-                    const mid = (m.id ? String(m.id) : '').toLowerCase();
-                    return cid === target || mid === target;
-                }) || null;
-                const found = foundRaw && foundRaw.state !== 'RESOLVED' && Number(foundRaw.bettingEndTime || foundRaw.deadline || 0) <= nowSec
-                    ? { ...foundRaw, state: 'RESOLVING' as const }
-                    : foundRaw;
+    const market = React.useMemo<MarketData | null>(() => {
+        const target = (id || '').toLowerCase();
+        const foundRaw = markets.find((m) => {
+            const cid = (m.contractId || '').toLowerCase();
+            const mid = (m.id ? String(m.id) : '').toLowerCase();
+            return cid === target || mid === target;
+        }) || null;
+        return foundRaw && foundRaw.state !== 'RESOLVED' && Number(foundRaw.bettingEndTime || foundRaw.deadline || 0) <= now
+            ? { ...foundRaw, state: 'RESOLVING' as const }
+            : foundRaw;
+    }, [id, markets, now]);
 
-                if (!cancelled) {
-                    setMarket(found);
-                    setIsInvalidBet(!found);
-                }
-            } catch (error) {
-                console.error('Error loading indexed market:', error);
-                if (!cancelled) {
-                    setMarket(null);
-                    setIsInvalidBet(true);
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        };
-        if (id) {
-            load();
-        }
-        return () => {
-            cancelled = true;
-        };
-    }, [id]);
+    const loading = isLoading && markets.length === 0;
+    const isInvalidBet = !loading && !market;
 
     return (
         <>
