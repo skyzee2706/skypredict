@@ -252,7 +252,7 @@ const TOP_FIVE_TEAMS_BY_COMPETITION: Record<string, Set<string>> = {
   ])
 };
 const DOMESTIC_COMPETITIONS = new Set(Object.keys(TOP_FIVE_TEAMS_BY_COMPETITION));
-const UCL_COMPETITIONS = new Set(['CL', 'UCL']);
+const UCL_COMPETITIONS = new Set(['CL', 'UCL', 'WC']);
 const SPORTS_DISCOVERY_INTERVAL_MS = 12 * 60 * 60 * 1000;
 const SPORTS_RESOLVE_SCAN_INTERVAL_MS = 10 * 60 * 1000;
 const CRYPTO_SWEEP_INTERVAL_MS = 5 * 60 * 1000;

@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { MarketData } from '../../../data/markets';
-import { useBatchedMarkets, useFactoryMarkets } from '../../../hooks/useMarketBatches';
+import { useIndexedMarkets } from '../../../hooks/useIndexedMarkets';
 import styles from './LandingView.module.css';
 
 /* ── SVG Icon Components (consistent across all devices) ── */
@@ -65,15 +65,7 @@ const LandingView: React.FC = () => {
         router.push(path);
     }, [router]);
 
-    const { addresses } = useFactoryMarkets();
-    const { markets: batchedMarkets } = useBatchedMarkets(addresses);
-    const [allMarkets, setAllMarkets] = React.useState<MarketData[]>([]);
-
-    React.useEffect(() => {
-        if (batchedMarkets.length > 0) {
-            setAllMarkets(batchedMarkets);
-        }
-    }, [batchedMarkets]);
+    const { markets: allMarkets } = useIndexedMarkets();
 
     const activeMarkets = allMarkets.filter(m => m.state === 'ACTIVE');
     const activeMarketsCount = activeMarkets.length;
