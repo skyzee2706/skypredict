@@ -86,6 +86,49 @@ function normalize(address) {
   return String(address).toLowerCase();
 }
 
+function stripLeadingZeros(value) {
+  const stripped = value.replace(/^0+/, '');
+  return stripped || '0';
+}
+
+function toBigIntString(value) {
+  if (typeof value === 'bigint') return value.toString();
+  if (value === null || value === undefined) return '0';
+
+  const raw = String(value).trim();
+  if (!raw) return '0';
+
+  if (/^[+-]?\d+$/.test(raw)) {
+    const sign = raw.startsWith('-') ? '-' : '';
+    const normalized = stripLeadingZeros(raw.replace(/^[+-]/, ''));
+    return normalized === '0' ? '0' : `${sign}${normalized}`;
+  }
+
+  const match = raw.match(/^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i);
+  if (!match) return '0';
+
+  const [, signRaw, wholeRaw, fractionRaw = '', exponentRaw = '0'] = match;
+  const exponent = Number(exponentRaw);
+  if (!Number.isFinite(exponent)) return '0';
+
+  let digits = `${wholeRaw}${fractionRaw}`;
+  const shift = exponent - fractionRaw.length;
+  if (shift >= 0) {
+    digits = `${digits}${'0'.repeat(shift)}`;
+  } else {
+    const integerLength = digits.length + shift;
+    digits = integerLength <= 0 ? '0' : digits.slice(0, integerLength);
+  }
+
+  const normalized = stripLeadingZeros(digits);
+  if (normalized === '0') return '0';
+  return `${signRaw === '-' ? '-' : ''}${normalized}`;
+}
+
+function toBigIntSafe(value) {
+  return BigInt(toBigIntString(value));
+}
+
 function getUser(map, address) {
   const key = normalize(address);
   if (!map.has(key)) {
@@ -114,7 +157,7 @@ async function getState() {
     .eq('id', STATE_ID)
     .maybeSingle();
   if (error) throw error;
-  return data?.last_processed_block ? BigInt(String(data.last_processed_block)) : 0n;
+  return data?.last_processed_block ? toBigIntSafe(data.last_processed_block) : 0n;
 }
 
 async function resetTables() {
@@ -136,8 +179,8 @@ async function readExistingUsers() {
   if (lbError) throw lbError;
   for (const row of leaderboardRows || []) {
     const user = getUser(users, row.user_address);
-    user.volume = BigInt(String(row.volume || '0'));
-    user.positionValue = BigInt(String(row.payout || '0'));
+    user.volume = toBigIntSafe(row.volume);
+    user.positionValue = toBigIntSafe(row.payout);
     user.sideA = Number(row.side_a_bets || 0);
     user.draw = Number(row.draw_bets || 0);
     user.sideB = Number(row.side_b_bets || 0);
@@ -153,12 +196,12 @@ async function readExistingUsers() {
     const market = normalize(row.market_address);
     user.markets.add(market);
     user.positions.set(market, {
-      sideA: BigInt(String(row.side_a_amount || '0')),
-      draw: BigInt(String(row.draw_amount || '0')),
-      sideB: BigInt(String(row.side_b_amount || '0')),
-      volume: BigInt(String(row.volume || '0')),
-      payout: BigInt(String(row.payout || '0')),
-      pnl: BigInt(String(row.pnl || '0')),
+      sideA: toBigIntSafe(row.side_a_amount),
+      draw: toBigIntSafe(row.draw_amount),
+      sideB: toBigIntSafe(row.side_b_amount),
+      volume: toBigIntSafe(row.volume),
+      payout: toBigIntSafe(row.payout),
+      pnl: toBigIntSafe(row.pnl),
       claimed: Boolean(row.claimed),
     });
   }

@@ -1,4 +1,5 @@
 import { CachedActivity, CachedLeaderboardEntry, IndexerCache } from './cache';
+import { toBigIntString } from '../numbers/bigintString';
 import { getSupabaseAdmin, isSupabaseConfigured } from '../supabase/server';
 
 const INDEXER_STATE_ID = 'main';
@@ -54,9 +55,9 @@ function normalizeAddress(address: string) {
 function toLeaderboardEntry(row: LeaderboardRow): CachedLeaderboardEntry {
   return {
     address: normalizeAddress(row.user_address),
-    volume: String(row.volume),
-    payout: String(row.payout),
-    pnl: String(row.pnl),
+    volume: toBigIntString(row.volume),
+    payout: toBigIntString(row.payout),
+    pnl: toBigIntString(row.pnl),
     sideABets: row.side_a_bets,
     drawBets: row.draw_bets,
     sideBBets: row.side_b_bets,
@@ -215,12 +216,12 @@ export async function readSupabasePortfolio(address: string, limit = DEFAULT_ACT
     marketAddresses: portfolioRows.map((row) => normalizeAddress(row.market_address)),
     positions: portfolioRows.map((row) => ({
       market: normalizeAddress(row.market_address),
-      sideA: String(row.side_a_amount ?? '0'),
-      draw: String(row.draw_amount ?? '0'),
-      sideB: String(row.side_b_amount ?? '0'),
-      volume: String(row.volume ?? '0'),
-      payout: String(row.payout ?? '0'),
-      pnl: String(row.pnl ?? '0'),
+      sideA: toBigIntString(row.side_a_amount),
+      draw: toBigIntString(row.draw_amount),
+      sideB: toBigIntString(row.side_b_amount),
+      volume: toBigIntString(row.volume),
+      payout: toBigIntString(row.payout),
+      pnl: toBigIntString(row.pnl),
       claimed: Boolean(row.claimed),
       updatedAt: row.updated_at ?? null,
     })),

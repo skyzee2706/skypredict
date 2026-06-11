@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { toBigIntSafe } from '../lib/numbers/bigintString';
 import { useAccount } from "wagmi";
 
 export interface LeaderboardEntry {
@@ -36,9 +37,9 @@ const DATABASE_FALLBACK_TIMEOUT_MS = 60_000;
 function normalizeEntry(entry: ApiLeaderboardEntry): LeaderboardEntry {
     return {
         ...entry,
-        volume: BigInt(entry.volume),
-        payout: BigInt(entry.payout),
-        pnl: BigInt(entry.pnl),
+        volume: toBigIntSafe(entry.volume),
+        payout: toBigIntSafe(entry.payout),
+        pnl: toBigIntSafe(entry.pnl),
     };
 }
 

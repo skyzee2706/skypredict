@@ -3,6 +3,7 @@ import { FACTORY_ABI, FACTORY_ADDRESS, TOKEN_ADDRESS } from '../constants';
 import { LEADERBOARD_MAX_BLOCK_RANGE, LEADERBOARD_START_BLOCK } from '@/config/leaderboard';
 import { CachedActivity, CachedLeaderboardEntry, IndexerCache, getEmptyIndexerCache, readIndexerCache, writeIndexerCache } from './cache';
 import { saveIndexerCacheToSupabase } from './supabaseStore';
+import { toBigIntSafe } from '../numbers/bigintString';
 
 const BetPlacedEvent = parseAbiItem(
     'event BetPlaced(address indexed user, uint8 outcome, uint256 amount, uint256 ethFeePaid)'
@@ -64,8 +65,8 @@ function buildUserMap(cache: IndexerCache) {
     const map = new Map<string, MutableUser>();
     for (const entry of cache.leaderboard) {
         map.set(entry.address.toLowerCase(), {
-            volume: BigInt(entry.volume),
-            payout: BigInt(entry.payout),
+            volume: toBigIntSafe(entry.volume),
+            payout: toBigIntSafe(entry.payout),
             sideA: entry.sideABets,
             draw: entry.drawBets,
             sideB: entry.sideBBets,
@@ -99,7 +100,7 @@ function addActivity(cache: IndexerCache, activity: CachedActivity) {
     if (current.some((item) => `${item.txHash}-${item.logIndex}` === id)) return;
 
     cache.userActivity[key] = [activity, ...current]
-        .sort((a, b) => Number(BigInt(b.blockNumber) - BigInt(a.blockNumber)) || b.logIndex - a.logIndex)
+        .sort((a, b) => Number(toBigIntSafe(b.blockNumber) - toBigIntSafe(a.blockNumber)) || b.logIndex - a.logIndex)
         .slice(0, MAX_ACTIVITY_PER_USER);
 }
 
@@ -117,10 +118,10 @@ function rebuildLeaderboard(userMap: Map<string, MutableUser>): CachedLeaderboar
         pnlRank: 0,
     }));
 
-    const byVolume = [...baseEntries].sort((a, b) => compareBigintDesc(BigInt(a.volume), BigInt(b.volume)));
+    const byVolume = [...baseEntries].sort((a, b) => compareBigintDesc(toBigIntSafe(a.volume), toBigIntSafe(b.volume)));
     byVolume.forEach((entry, index) => { entry.volumeRank = index + 1; });
 
-    const byPnl = [...baseEntries].sort((a, b) => compareBigintDesc(BigInt(a.pnl), BigInt(b.pnl)));
+    const byPnl = [...baseEntries].sort((a, b) => compareBigintDesc(toBigIntSafe(a.pnl), toBigIntSafe(b.pnl)));
     byPnl.forEach((entry, index) => { entry.pnlRank = index + 1; });
 
     return baseEntries;
@@ -192,7 +193,7 @@ export async function refreshIndexerCache(client: PublicClient) {
     }
 
     const latestBlock = await client.getBlockNumber();
-    const cachedLast = BigInt(cache.lastProcessedBlock || '0');
+    const cachedLast = toBigIntSafe(cache.lastProcessedBlock || '0');
     const fromBlock = cachedLast > 0n ? cachedLast + 1n : LEADERBOARD_START_BLOCK;
 
     if (fromBlock > latestBlock) {

@@ -4,6 +4,7 @@ import { NO_STORE_HEADERS } from '../../../../lib/api/noStore';
 import { ROUTER_ADDRESS } from '../../../../lib/constants';
 import { seismicTestnet } from '../../../../lib/onchain/seismicChain';
 import { getSupabaseAdmin, isSupabaseConfigured } from '../../../../lib/supabase/server';
+import { toBigIntString } from '../../../../lib/numbers/bigintString';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,7 @@ function recomputeMarket(row: Record<string, unknown>, outcome: OptimisticBetPay
 }
 
 function addUnits(value: unknown, amount: bigint) {
-  return (BigInt(String(value || '0')) + amount).toString();
+  return (BigInt(toBigIntString(value)) + amount).toString();
 }
 
 async function verifyBetRouted(payload: Required<OptimisticBetPayload>, amountInUnits: bigint) {
@@ -154,9 +155,9 @@ export async function POST(request: Request) {
       .maybeSingle();
     if (positionError) throw positionError;
 
-    const sideA = normalizedPayload.outcome === 'YES' ? addUnits(existingPosition?.side_a_amount, amountInUnits) : String(existingPosition?.side_a_amount || '0');
-    const draw = normalizedPayload.outcome === 'DRAW' ? addUnits(existingPosition?.draw_amount, amountInUnits) : String(existingPosition?.draw_amount || '0');
-    const sideB = normalizedPayload.outcome === 'NO' ? addUnits(existingPosition?.side_b_amount, amountInUnits) : String(existingPosition?.side_b_amount || '0');
+    const sideA = normalizedPayload.outcome === 'YES' ? addUnits(existingPosition?.side_a_amount, amountInUnits) : toBigIntString(existingPosition?.side_a_amount);
+    const draw = normalizedPayload.outcome === 'DRAW' ? addUnits(existingPosition?.draw_amount, amountInUnits) : toBigIntString(existingPosition?.draw_amount);
+    const sideB = normalizedPayload.outcome === 'NO' ? addUnits(existingPosition?.side_b_amount, amountInUnits) : toBigIntString(existingPosition?.side_b_amount);
     const volume = (BigInt(sideA) + BigInt(draw) + BigInt(sideB)).toString();
 
     const { error: upsertPositionError } = await supabase.from('user_portfolios').upsert({
