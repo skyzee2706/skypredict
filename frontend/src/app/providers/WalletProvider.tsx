@@ -32,12 +32,6 @@ const PrivyWalletContextProvider: React.FC<{ children: React.ReactNode }> = ({ c
 
     const syncActiveWallet = useCallback(async () => {
         if (!ready || !authenticated || !primaryWallet) return;
-
-        const targetChainIdStr = `eip155:${seismicTestnet.id}`;
-        if (primaryWallet.chainId !== targetChainIdStr) {
-            await primaryWallet.switchChain(seismicTestnet.id);
-        }
-
         await setActiveWallet(primaryWallet);
     }, [ready, authenticated, primaryWallet, setActiveWallet]);
 

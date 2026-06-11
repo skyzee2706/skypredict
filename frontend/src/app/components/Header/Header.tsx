@@ -8,11 +8,12 @@ import DisconnectIcon from '../Shared/DisconnectIcon';
 import TopUpIcon from '../Shared/TopUpIcon';
 import InfoIcon from '../Shared/InfoIcon';
 import Tooltip from '../Shared/Tooltip';
+import type { AppPage } from '../../../lib/navigation/appRoutes';
 import { TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER, TOKEN_SYMBOL } from '../../../lib/constants';
 
 interface HeaderProps {
-    onNavigate: (page: 'landing' | 'markets' | 'portfolio' | 'leaderboard' | 'faucet') => void;
-    currentPage: 'landing' | 'markets' | 'portfolio' | 'leaderboard' | 'faucet';
+    onNavigate: (page: AppPage) => void;
+    currentPage: AppPage;
 }
 
 const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
@@ -107,31 +108,10 @@ const Header: React.FC<HeaderProps> = ({ onNavigate, currentPage }) => {
         setWalletDropdownOpen(false);
     }, [disconnect]);
 
-    const navigate = React.useCallback((page: HeaderProps['currentPage']) => {
-        const targetPathByPage: Record<HeaderProps['currentPage'], string> = {
-            landing: '/',
-            markets: '/markets',
-            portfolio: '/portfolio',
-            leaderboard: '/leaderboard',
-            faucet: '/faucet',
-        };
-        const targetPath = targetPathByPage[page];
-        const needsFreshWalletBoot = page === 'portfolio' || page === 'faucet' || page === 'markets';
-
-        // Production fix: transaction-sensitive pages need a fresh Privy/Wagmi
-        // boot after cross-page navigation. This mirrors pressing F5, which is
-        // known to make deposit and bet transactions work reliably.
-        if (
-            needsFreshWalletBoot &&
-            typeof window !== 'undefined' &&
-            window.location.pathname !== targetPath
-        ) {
-            window.location.assign(targetPath);
-            return;
-        }
-
+    const navigate = React.useCallback((page: AppPage) => {
+        if (page === currentPage) return;
         onNavigate(page);
-    }, [onNavigate]);
+    }, [currentPage, onNavigate]);
 
     const handleDeposit = React.useCallback(() => {
         navigate('faucet');
