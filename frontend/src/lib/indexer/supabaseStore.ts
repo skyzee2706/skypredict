@@ -1,10 +1,12 @@
-import { CachedActivity, CachedLeaderboardEntry, IndexerCache } from './cache';
+import { CachedActivity, IndexerCache } from './cache';
+import { buildLeaderboardFromPortfolioRows, ActivityAccountingRow } from './leaderboardAccounting';
 import { toBigIntString } from '../numbers/bigintString';
 import { getSupabaseAdmin, isSupabaseConfigured } from '../supabase/server';
 
 const INDEXER_STATE_ID = 'main';
 const DEFAULT_ACTIVITY_LIMIT = 50;
 const DEFAULT_LEADERBOARD_LIMIT = 20;
+const SUPABASE_PAGE_SIZE = 1000;
 
 type PortfolioRow = {
   user_address: string;
@@ -35,36 +37,8 @@ type ActivityRow = {
   claimed?: boolean | null;
 };
 
-type LeaderboardRow = {
-  user_address: string;
-  volume: string | number;
-  payout: string | number;
-  pnl: string | number;
-  side_a_bets: number;
-  draw_bets: number;
-  side_b_bets: number;
-  total_bets: number;
-  volume_rank: number;
-  pnl_rank: number;
-};
-
 function normalizeAddress(address: string) {
   return address.toLowerCase() as `0x${string}`;
-}
-
-function toLeaderboardEntry(row: LeaderboardRow): CachedLeaderboardEntry {
-  return {
-    address: normalizeAddress(row.user_address),
-    volume: toBigIntString(row.volume),
-    payout: toBigIntString(row.payout),
-    pnl: toBigIntString(row.pnl),
-    sideABets: row.side_a_bets,
-    drawBets: row.draw_bets,
-    sideBBets: row.side_b_bets,
-    totalBets: row.total_bets,
-    volumeRank: row.volume_rank,
-    pnlRank: row.pnl_rank,
-  };
 }
 
 function toActivity(row: ActivityRow): CachedActivity {
@@ -83,6 +57,42 @@ function toActivity(row: ActivityRow): CachedActivity {
     payout: row.payout === undefined || row.payout === null ? undefined : String(row.payout),
     claimed: row.claimed ?? undefined,
   };
+}
+
+async function readAllPortfolioRows(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  const rows: PortfolioRow[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('user_portfolios')
+      .select('user_address, market_address, side_a_amount, draw_amount, side_b_amount, volume, payout, pnl')
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const page = (data ?? []) as PortfolioRow[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  return rows;
+}
+
+async function readAllLeaderboardActivityRows(supabase: ReturnType<typeof getSupabaseAdmin>) {
+  const rows: ActivityAccountingRow[] = [];
+
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('user_activities')
+      .select('user_address, type, outcome')
+      .range(from, from + SUPABASE_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    const page = (data ?? []) as ActivityAccountingRow[];
+    rows.push(...page);
+    if (page.length < SUPABASE_PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
 export async function getSupabaseLastProcessedBlock() {
@@ -236,24 +246,9 @@ export async function readSupabaseLeaderboard(address?: string, limit = DEFAULT_
 
   const supabase = getSupabaseAdmin();
   const normalized = address?.toLowerCase();
-  const [volumeLeaderboardResult, pnlLeaderboardResult, currentUserResult, stateResult] = await Promise.all([
-    supabase
-      .from('leaderboard')
-      .select('*')
-      .order('volume_rank', { ascending: true })
-      .limit(limit),
-    supabase
-      .from('leaderboard')
-      .select('*')
-      .order('pnl_rank', { ascending: true })
-      .limit(limit),
-    normalized
-      ? supabase
-        .from('leaderboard')
-        .select('*')
-        .eq('user_address', normalized)
-        .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
+  const [portfolioRows, activityRows, stateResult] = await Promise.all([
+    readAllPortfolioRows(supabase),
+    readAllLeaderboardActivityRows(supabase),
     supabase
       .from('indexer_state')
       .select('last_processed_block, updated_at')
@@ -261,16 +256,14 @@ export async function readSupabaseLeaderboard(address?: string, limit = DEFAULT_
       .maybeSingle(),
   ]);
 
-  if (volumeLeaderboardResult.error) throw volumeLeaderboardResult.error;
-  if (pnlLeaderboardResult.error) throw pnlLeaderboardResult.error;
-  if (currentUserResult.error) throw currentUserResult.error;
   if (stateResult.error) throw stateResult.error;
 
-  const volumeLeaderboard = ((volumeLeaderboardResult.data ?? []) as LeaderboardRow[]).map(toLeaderboardEntry);
-  const pnlLeaderboard = ((pnlLeaderboardResult.data ?? []) as LeaderboardRow[]).map(toLeaderboardEntry);
-  const currentUser = currentUserResult.data
-    ? toLeaderboardEntry(currentUserResult.data as LeaderboardRow)
-    : null;
+  const { volumeLeaderboard, pnlLeaderboard, currentUser } = buildLeaderboardFromPortfolioRows({
+    portfolioRows,
+    activityRows,
+    currentUserAddress: normalized,
+    limit,
+  });
 
   return {
     version: 1,

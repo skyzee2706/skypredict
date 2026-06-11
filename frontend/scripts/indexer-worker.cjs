@@ -586,6 +586,7 @@ async function scanTransfers(markets, fromBlock, toBlock, users, indexedActivity
 
 async function reconcilePositions(users) {
   for (const user of users.values()) {
+    user.volume = 0n;
     user.positionValue = 0n;
     user.sideA = 0;
     user.draw = 0;
@@ -646,6 +647,7 @@ async function reconcilePositions(users) {
       }
 
       user.positionValue += positionValue;
+      user.volume += total;
       user.positions.set(market, {
         sideA,
         draw,
@@ -670,22 +672,70 @@ async function reconcilePositions(users) {
   }
 }
 
+function getPositionVolume(position) {
+  const sideTotal = position.sideA + position.draw + position.sideB;
+  return position.volume > 0n ? position.volume : sideTotal;
+}
+
+function getPositionValue(position, volume) {
+  return position.payout > 0n ? position.payout : volume + position.pnl;
+}
+
+function getPortfolioLeaderboardStats(user) {
+  const fallbackBets = { sideA: 0, draw: 0, sideB: 0, total: 0 };
+  let volume = 0n;
+  let positionValue = 0n;
+
+  for (const position of user.positions.values()) {
+    const positionVolume = getPositionVolume(position);
+    volume += positionVolume;
+    positionValue += getPositionValue(position, positionVolume);
+
+    if (position.sideA > 0n) fallbackBets.sideA += 1;
+    if (position.draw > 0n) fallbackBets.draw += 1;
+    if (position.sideB > 0n) fallbackBets.sideB += 1;
+  }
+
+  fallbackBets.total = fallbackBets.sideA + fallbackBets.draw + fallbackBets.sideB;
+  return { volume, positionValue, fallbackBets };
+}
+
+function getActivityBetStats(user, fallbackBets) {
+  const bets = { sideA: 0, draw: 0, sideB: 0, total: 0 };
+
+  for (const activity of user.activities) {
+    if (activity.type !== 'BET') continue;
+    const outcome = Number(activity.outcome);
+    if (outcome === 1) bets.draw += 1;
+    else if (outcome === 2) bets.sideB += 1;
+    else bets.sideA += 1;
+    bets.total += 1;
+  }
+
+  return bets.total > 0 ? bets : fallbackBets;
+}
+
 function buildLeaderboard(users) {
   const rows = [...users.values()]
-    .filter((user) => user.volume > 0n || user.positionValue > 0n || user.trades > 0)
-    .map((user) => ({
-      user_address: user.address,
-      volume: user.volume.toString(),
-      payout: user.positionValue.toString(),
-      pnl: (user.positionValue - user.volume).toString(),
-      side_a_bets: user.sideA,
-      draw_bets: user.draw,
-      side_b_bets: user.sideB,
-      total_bets: user.trades,
-      volume_rank: 0,
-      pnl_rank: 0,
-      updated_at: new Date().toISOString(),
-    }));
+    .map((user) => {
+      const { volume, positionValue, fallbackBets } = getPortfolioLeaderboardStats(user);
+      const bets = getActivityBetStats(user, fallbackBets);
+
+      return {
+        user_address: user.address,
+        volume: volume.toString(),
+        payout: positionValue.toString(),
+        pnl: (positionValue - volume).toString(),
+        side_a_bets: bets.sideA,
+        draw_bets: bets.draw,
+        side_b_bets: bets.sideB,
+        total_bets: bets.total,
+        volume_rank: 0,
+        pnl_rank: 0,
+        updated_at: new Date().toISOString(),
+      };
+    })
+    .filter((row) => BigInt(row.volume) > 0n || BigInt(row.payout) !== 0n);
 
   [...rows]
     .sort((a, b) => (BigInt(b.volume) > BigInt(a.volume) ? 1 : BigInt(b.volume) < BigInt(a.volume) ? -1 : 0))
