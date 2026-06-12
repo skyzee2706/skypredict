@@ -14,6 +14,12 @@ type PortfolioLike = {
   activity: PortfolioActivityLike[];
 };
 
+type ClaimablePositionLike = {
+  market?: string | { contractId?: string | null };
+  canClaim?: boolean;
+  claimed?: boolean;
+};
+
 function normalizeAddress(address: string) {
   return address.toLowerCase();
 }
@@ -27,6 +33,23 @@ export function isAlreadyClaimedOnChainError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   const normalized = message.toLowerCase().replace(/[\s-]/g, '');
   return normalized.includes('alreadyclaimed') && normalized.includes('onchain');
+}
+
+function getMarketAddress(position: ClaimablePositionLike) {
+  if (typeof position.market === 'string') return position.market.toLowerCase();
+  return String(position.market?.contractId || '').toLowerCase();
+}
+
+export function getClaimableUnclaimedMarketAddresses(positions: ClaimablePositionLike[]) {
+  const addresses = new Set<string>();
+
+  for (const position of positions) {
+    if (!position.canClaim || position.claimed) continue;
+    const address = getMarketAddress(position);
+    if (address) addresses.add(address);
+  }
+
+  return [...addresses];
 }
 
 export function markPortfolioMarketClaimed<T extends PortfolioLike>(portfolio: T, marketAddress: string): T {

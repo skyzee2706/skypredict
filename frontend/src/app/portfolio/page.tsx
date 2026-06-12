@@ -5,12 +5,12 @@ import { useRouter } from "next/navigation";
 import { useAccount } from "wagmi";
 import Header from "../components/Header/Header";
 import styles from "../page.module.css";
-import { claimRewards } from "@/lib/onchain/writes";
+import { claimRewards, getUserBets } from "@/lib/onchain/writes";
 import { MarketData } from "@/data/markets";
 import { useBatchedMarkets } from "@/hooks/useMarketBatches";
 import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useToast } from "../providers/ToastProvider";
-import { isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from "@/lib/portfolio/claimState";
+import { getClaimableUnclaimedMarketAddresses, isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from "@/lib/portfolio/claimState";
 import { persistClaimedPortfolioPosition } from "@/lib/portfolio/claimPersistence";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -102,6 +102,7 @@ export default function PortfolioPage() {
     const [historyPage, setHistoryPage] = useState(1);
     const [cachedPortfolio, setCachedPortfolio] = useState<CachedPortfolioResponse | null>(null);
     const [portfolioCacheLoading, setPortfolioCacheLoading] = useState(false);
+    const claimedSyncRef = React.useRef(new Set<string>());
     const hasWalletAddress = isConnected && Boolean(address);
     const liveAddresses = useMemo(() => cachedPortfolio?.marketAddresses ?? [], [cachedPortfolio]);
     const { markets: batchedMarkets, isLoading: marketsLoading, isFetching: marketsFetching } = useBatchedMarkets(liveAddresses, { refetchInterval: false, enabled: liveAddresses.length > 0 });
@@ -228,6 +229,37 @@ export default function PortfolioPage() {
     }, [address, hasWalletAddress]);
 
     const isLoading = hasWalletAddress && portfolioCacheLoading;
+
+    useEffect(() => {
+        claimedSyncRef.current.clear();
+    }, [address]);
+
+    useEffect(() => {
+        if (!address || !hasWalletAddress) return;
+
+        const marketAddresses = getClaimableUnclaimedMarketAddresses(displayedPositions);
+        for (const marketAddress of marketAddresses) {
+            const syncKey = `${address.toLowerCase()}:${marketAddress}`;
+            if (claimedSyncRef.current.has(syncKey)) continue;
+            claimedSyncRef.current.add(syncKey);
+
+            void getUserBets(marketAddress as `0x${string}`, address as `0x${string}`)
+                .then((position) => {
+                    if (!position.claimed) return;
+                    setCachedPortfolio((current) => current ? markPortfolioMarketClaimed(current, marketAddress) : current);
+                    void persistClaimedPortfolioPosition({
+                        marketAddress,
+                        userAddress: address,
+                    }).catch((error) => {
+                        console.warn("Claimed status background sync failed; indexer will reconcile later:", error);
+                    });
+                })
+                .catch((error) => {
+                    claimedSyncRef.current.delete(syncKey);
+                    console.warn("Claimed status background check failed:", error);
+                });
+        }
+    }, [address, displayedPositions, hasWalletAddress]);
 
     const handleClaim = async (position: PortfolioPosition) => {
         if (!address) return;

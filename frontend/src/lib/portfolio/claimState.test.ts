@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from './claimState';
+import { getClaimableUnclaimedMarketAddresses, isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from './claimState';
 
 test('markPortfolioMarketClaimed marks the matching position and winning activities as claimed', () => {
   const portfolio = {
@@ -46,4 +46,15 @@ test('isAlreadyClaimedOnChainError recognizes on-chain claimed preflight failure
   assert.equal(isAlreadyClaimedOnChainError(new Error('This reward is already claimed onchain.')), true);
   assert.equal(isAlreadyClaimedOnChainError(new Error('This market is not resolved on-chain yet.')), false);
   assert.equal(isAlreadyClaimedOnChainError('This reward is already claimed on-chain.'), true);
+});
+
+test('getClaimableUnclaimedMarketAddresses returns unique market addresses that need claimed sync', () => {
+  const addresses = getClaimableUnclaimedMarketAddresses([
+    { market: { contractId: '0xAAA0000000000000000000000000000000000000' }, canClaim: true, claimed: false },
+    { market: { contractId: '0xAAA0000000000000000000000000000000000000' }, canClaim: true, claimed: false },
+    { market: { contractId: '0xBBB0000000000000000000000000000000000000' }, canClaim: false, claimed: false },
+    { market: { contractId: '0xCCC0000000000000000000000000000000000000' }, canClaim: true, claimed: true },
+  ]);
+
+  assert.deepEqual(addresses, ['0xaaa0000000000000000000000000000000000000']);
 });
