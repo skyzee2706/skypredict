@@ -23,6 +23,12 @@ function shouldMarkActivityClaimed(activity: PortfolioActivityLike) {
   return status === 'WIN' || status === 'CLAIMED';
 }
 
+export function isAlreadyClaimedOnChainError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase().replace(/[\s-]/g, '');
+  return normalized.includes('alreadyclaimed') && normalized.includes('onchain');
+}
+
 export function markPortfolioMarketClaimed<T extends PortfolioLike>(portfolio: T, marketAddress: string): T {
   const target = normalizeAddress(marketAddress);
 

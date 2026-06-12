@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { markPortfolioMarketClaimed } from './claimState';
+import { isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from './claimState';
 
 test('markPortfolioMarketClaimed marks the matching position and winning activities as claimed', () => {
   const portfolio = {
@@ -39,4 +39,11 @@ test('markPortfolioMarketClaimed does not mutate the previous portfolio object',
   assert.notEqual(updated, portfolio);
   assert.equal(portfolio.positions[0].claimed, false);
   assert.equal(updated.positions[0].claimed, true);
+});
+
+test('isAlreadyClaimedOnChainError recognizes on-chain claimed preflight failures', () => {
+  assert.equal(isAlreadyClaimedOnChainError(new Error('This reward is already claimed on-chain.')), true);
+  assert.equal(isAlreadyClaimedOnChainError(new Error('This reward is already claimed onchain.')), true);
+  assert.equal(isAlreadyClaimedOnChainError(new Error('This market is not resolved on-chain yet.')), false);
+  assert.equal(isAlreadyClaimedOnChainError('This reward is already claimed on-chain.'), true);
 });

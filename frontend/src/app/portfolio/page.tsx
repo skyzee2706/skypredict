@@ -10,7 +10,7 @@ import { MarketData } from "@/data/markets";
 import { useBatchedMarkets } from "@/hooks/useMarketBatches";
 import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useToast } from "../providers/ToastProvider";
-import { markPortfolioMarketClaimed } from "@/lib/portfolio/claimState";
+import { isAlreadyClaimedOnChainError, markPortfolioMarketClaimed } from "@/lib/portfolio/claimState";
 import { persistClaimedPortfolioPosition } from "@/lib/portfolio/claimPersistence";
 
 const HISTORY_PAGE_SIZE = 20;
@@ -246,6 +246,17 @@ export default function PortfolioPage() {
             });
         } catch (error) {
             console.error("Claim failed:", error);
+            if (isAlreadyClaimedOnChainError(error)) {
+                setCachedPortfolio((current) => current ? markPortfolioMarketClaimed(current, marketAddress) : current);
+                showToast("Reward was already claimed on-chain. Portfolio synced.", "success");
+                void persistClaimedPortfolioPosition({
+                    marketAddress,
+                    userAddress: address,
+                }).catch((syncError) => {
+                    console.warn("Claimed status sync failed; indexer will reconcile later:", syncError);
+                });
+                return;
+            }
             showToast(getErrorMessage(error), "error");
         } finally {
             setClaiming(null);

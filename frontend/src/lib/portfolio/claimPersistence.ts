@@ -1,5 +1,5 @@
 type PersistClaimPayload = {
-  txHash: string;
+  txHash?: string;
   marketAddress: string;
   userAddress: string;
 };

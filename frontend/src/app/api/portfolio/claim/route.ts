@@ -36,7 +36,13 @@ function getClient() {
   });
 }
 
-async function verifyClaim(payload: Required<ClaimPayload>) {
+type NormalizedClaimPayload = {
+  txHash?: string;
+  marketAddress: string;
+  userAddress: string;
+};
+
+async function verifyClaimEvent(payload: NormalizedClaimPayload & { txHash: string }) {
   const client = getClient();
   const receipt = await client.getTransactionReceipt({ hash: payload.txHash as `0x${string}` });
   if (receipt.status !== 'success') throw new Error('Claim transaction receipt is not successful');
@@ -61,6 +67,20 @@ async function verifyClaim(payload: Required<ClaimPayload>) {
   throw new Error('Verified receipt does not contain matching Claimed event');
 }
 
+async function verifyAlreadyClaimedPosition(payload: NormalizedClaimPayload) {
+  const client = getClient();
+  const position = await client.readContract({
+    address: payload.marketAddress as `0x${string}`,
+    abi: MARKET_ABI,
+    functionName: 'getUserPosition',
+    args: [payload.userAddress],
+  });
+
+  const raw = position as [bigint, bigint, bigint, boolean];
+  if (!raw[3]) throw new Error('Position is not claimed on-chain');
+  return { payout: null };
+}
+
 async function readWinningOutcome(marketAddress: string) {
   const client = getClient();
   const raw = await client.readContract({
@@ -79,19 +99,23 @@ export async function POST(request: Request) {
 
   try {
     const payload = (await request.json()) as ClaimPayload;
-    if (!isHashLike(payload.txHash) || !isAddressLike(payload.marketAddress) || !isAddressLike(payload.userAddress)) {
+    if (!isAddressLike(payload.marketAddress) || !isAddressLike(payload.userAddress)) {
+      return NextResponse.json({ ok: false, error: 'Invalid claim payload' }, { status: 400, headers: NO_STORE_HEADERS });
+    }
+    if (payload.txHash !== undefined && !isHashLike(payload.txHash)) {
       return NextResponse.json({ ok: false, error: 'Invalid claim payload' }, { status: 400, headers: NO_STORE_HEADERS });
     }
 
-    const txHash = payload.txHash as string;
     const marketAddress = payload.marketAddress as string;
     const userAddress = payload.userAddress as string;
-    const normalizedPayload = {
-      txHash,
+    const normalizedPayload: NormalizedClaimPayload = {
+      txHash: payload.txHash,
       marketAddress: normalizeAddress(marketAddress),
       userAddress: normalizeAddress(userAddress),
-    } as Required<ClaimPayload>;
-    const verified = await verifyClaim(normalizedPayload);
+    };
+    const verified = normalizedPayload.txHash
+      ? await verifyClaimEvent({ ...normalizedPayload, txHash: normalizedPayload.txHash })
+      : await verifyAlreadyClaimedPosition(normalizedPayload);
     const winningOutcome = await readWinningOutcome(normalizedPayload.marketAddress);
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
@@ -106,14 +130,17 @@ export async function POST(request: Request) {
 
     const volume = BigInt(toBigIntString(position?.volume));
     const payout = verified.payout;
+    const portfolioUpdate = payout === null
+      ? { claimed: true, updated_at: now }
+      : {
+          claimed: true,
+          payout: payout.toString(),
+          pnl: (payout - volume).toString(),
+          updated_at: now,
+        };
     const { error: portfolioError } = await supabase
       .from('user_portfolios')
-      .update({
-        claimed: true,
-        payout: payout.toString(),
-        pnl: (payout - volume).toString(),
-        updated_at: now,
-      })
+      .update(portfolioUpdate)
       .eq('user_address', normalizedPayload.userAddress)
       .eq('market_address', normalizedPayload.marketAddress);
     if (portfolioError) throw portfolioError;
@@ -121,7 +148,7 @@ export async function POST(request: Request) {
     const claimedActivityUpdate = {
       status: 'CLAIMED',
       claimed: true,
-      payout: payout.toString(),
+      ...(payout === null ? {} : { payout: payout.toString() }),
       updated_at: now,
     };
 
