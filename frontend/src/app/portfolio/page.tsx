@@ -10,6 +10,8 @@ import { MarketData } from "@/data/markets";
 import { useBatchedMarkets } from "@/hooks/useMarketBatches";
 import { SKYUSD_MULTIPLIER } from "@/lib/constants";
 import { useToast } from "../providers/ToastProvider";
+import { markPortfolioMarketClaimed } from "@/lib/portfolio/claimState";
+import { persistClaimedPortfolioPosition } from "@/lib/portfolio/claimPersistence";
 
 const HISTORY_PAGE_SIZE = 20;
 
@@ -88,6 +90,10 @@ function getResolvedOutcomeId(market: MarketData): number | undefined {
     return undefined;
 }
 
+function getErrorMessage(error: unknown) {
+    return error instanceof Error && error.message ? error.message : "Claim failed. Check wallet and console for details.";
+}
+
 export default function PortfolioPage() {
     const router = useRouter();
     const { address, isConnected } = useAccount();
@@ -117,7 +123,6 @@ export default function PortfolioPage() {
             const pnl = parseIndexedAmount(position.pnl);
             const positionValue = payout > 0 ? payout : volume + pnl;
 
-            const hasMarketMetadata = Boolean(marketMetadata);
             const isResolved = Boolean(marketMetadata?.state === 'RESOLVED' || marketMetadata?.state === 'UNDETERMINED');
             const userWon = isResolved && payout > 0;
 
@@ -225,14 +230,23 @@ export default function PortfolioPage() {
     const isLoading = hasWalletAddress && portfolioCacheLoading;
 
     const handleClaim = async (position: PortfolioPosition) => {
-        setClaiming(position.market.contractId);
+        if (!address) return;
+        const marketAddress = position.market.contractId as `0x${string}`;
+        setClaiming(marketAddress);
         try {
-            await claimRewards(position.market.contractId as `0x${string}`);
-            showToast("Claim transaction submitted successfully.", "success");
-            await loadPortfolio();
+            const result = await claimRewards(marketAddress);
+            setCachedPortfolio((current) => current ? markPortfolioMarketClaimed(current, marketAddress) : current);
+            showToast("Claim validated on-chain.", "success");
+            void persistClaimedPortfolioPosition({
+                txHash: result.hash,
+                marketAddress,
+                userAddress: address,
+            }).catch((error) => {
+                console.warn("Claim persistence failed; indexer will reconcile later:", error);
+            });
         } catch (error) {
             console.error("Claim failed:", error);
-            showToast("Claim failed. Check wallet and console for details.", "error");
+            showToast(getErrorMessage(error), "error");
         } finally {
             setClaiming(null);
         }

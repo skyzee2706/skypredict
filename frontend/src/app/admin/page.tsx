@@ -12,6 +12,8 @@ import { MarketData } from '../../data/markets';
 import { getDepositBalance, withdrawDepositFunds } from '../../lib/onchain/writes';
 import { TOKEN_ADDRESS } from '../../lib/constants';
 import { formatEther } from 'viem';
+import { getResolvableMarkets } from '../../lib/markets/resolutionFilters';
+import { dedupeMarketsByEvent } from '../../lib/markets/marketMath';
 
 const AdminPage: React.FC = () => {
     const router = useRouter();
@@ -135,7 +137,7 @@ const AdminPage: React.FC = () => {
 
     const visibleMarkets = useMemo(
         () =>
-            markets.sort((a, b) => {
+            getResolvableMarkets(dedupeMarketsByEvent(markets)).sort((a, b) => {
                 const aDeadline = typeof a.deadline === 'string' ? parseInt(a.deadline, 10) : a.deadline;
                 const bDeadline = typeof b.deadline === 'string' ? parseInt(b.deadline, 10) : b.deadline;
                 return aDeadline - bDeadline;

@@ -7,6 +7,7 @@ import MarketFullPage from '../../components/MarketExpanded/MarketFullPage';
 import { MarketData } from '../../../data/markets';
 import { useIndexedMarkets } from '../../../hooks/useIndexedMarkets';
 import styles from '../../page.module.css';
+import { getLiveMarketState } from '../../../lib/markets/resolutionFilters';
 
 // src/app/markets/[id]/page.tsx
 // ../ -> src/app/markets
@@ -34,9 +35,7 @@ export default function MarketPage() {
             const mid = (m.id ? String(m.id) : '').toLowerCase();
             return cid === target || mid === target;
         }) || null;
-        return foundRaw && foundRaw.state !== 'RESOLVED' && Number(foundRaw.bettingEndTime || foundRaw.deadline || 0) <= now
-            ? { ...foundRaw, state: 'RESOLVING' as const }
-            : foundRaw;
+        return foundRaw ? { ...foundRaw, state: getLiveMarketState(foundRaw, now) } : null;
     }, [id, markets, now]);
 
     const loading = isLoading && markets.length === 0;

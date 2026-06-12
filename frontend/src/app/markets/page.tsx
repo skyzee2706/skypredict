@@ -10,6 +10,7 @@ import styles from '../page.module.css';
 import { MarketState, MarketData } from '../../data/markets';
 import { useIndexedMarkets } from '../../hooks/useIndexedMarkets';
 import { useToast } from '../providers/ToastProvider';
+import { getLiveMarketState } from '../../lib/markets/resolutionFilters';
 
 export default function MarketsPage() {
     const router = useRouter();
@@ -47,9 +48,7 @@ export default function MarketsPage() {
     // Derived state for currently filtered markets
     const currentMarkets = React.useMemo(() => {
         return allMarkets.filter((m: MarketData) => {
-            const deadline = Number(m.bettingEndTime || m.deadline || 0);
-            const isPastBettingEnd = m.state !== 'RESOLVED' && deadline > 0 && deadline <= now;
-            const liveState: MarketState = isPastBettingEnd ? 'RESOLVING' : m.state;
+            const liveState = getLiveMarketState(m, now);
 
             if (activeMarketState === 'UNDETERMINED') {
                 return false;
@@ -64,11 +63,8 @@ export default function MarketsPage() {
 
         const latestMarket = allMarkets.find(m => m.id === selectedMarketId);
         if (latestMarket) {
-            if (activeMarketState === 'UNDETERMINED') {
-                const deadline = Number(latestMarket.deadline);
-                return latestMarket.state !== 'RESOLVED' && deadline > 0 && deadline < now ? latestMarket : null;
-            }
-            return latestMarket.state === activeMarketState ? latestMarket : null;
+            const liveState = getLiveMarketState(latestMarket, now);
+            return liveState === activeMarketState ? { ...latestMarket, state: liveState } : null;
         }
 
         return selectedMarketData?.state === activeMarketState ? selectedMarketData : null;
@@ -81,10 +77,10 @@ export default function MarketsPage() {
         if (!latestMarket) return;
 
         setSelectedMarketData(latestMarket);
-        if (activeMarketState !== 'UNDETERMINED' && latestMarket.state !== activeMarketState) {
+        if (getLiveMarketState(latestMarket, now) !== activeMarketState) {
             setSelectedMarketId(null);
         }
-    }, [selectedMarketId, allMarkets, activeMarketState]);
+    }, [selectedMarketId, allMarkets, activeMarketState, now]);
 
     const filteredMarkets = currentMarkets
         .filter(market => {

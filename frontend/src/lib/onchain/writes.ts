@@ -33,6 +33,11 @@ async function ensureRitualWallet(): Promise<void> {
 
 export type MarketOutcome = 'YES' | 'NO' | 'DRAW';
 
+export type ClaimRewardsResult = {
+  hash: `0x${string}`;
+  receipt: TransactionReceipt;
+};
+
 /**
  * Check if user has approved SkyUSD to the Router.
  * Returns true if allowance >= a very large amount (effectively unlimited).
@@ -132,8 +137,44 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
   return { hash, receipt, amountInUnits, outcome };
 }
 
-export async function claimRewards(marketAddress: `0x${string}`): Promise<void> {
+export async function claimRewards(marketAddress: `0x${string}`): Promise<ClaimRewardsResult> {
   await ensureRitualWallet();
+  const publicClient = getPublicClient();
+  const account = getAccount(wagmiConfig);
+  if (!account.address) throw new Error('Wallet not connected');
+
+  const [resolved, winningOutcomeRaw, position] = await Promise.all([
+    publicClient.readContract({
+      address: marketAddress,
+      abi: MARKET_ABI,
+      functionName: 'resolved',
+      args: []
+    }),
+    publicClient.readContract({
+      address: marketAddress,
+      abi: MARKET_ABI,
+      functionName: 'winningOutcome',
+      args: []
+    }),
+    publicClient.readContract({
+      address: marketAddress,
+      abi: MARKET_ABI,
+      functionName: 'getUserPosition',
+      args: [account.address]
+    })
+  ]);
+
+  if (!resolved) throw new Error('This market is not resolved on-chain yet.');
+
+  const [sideA, draw, sideB, claimed] = position as [bigint, bigint, bigint, boolean];
+  if (claimed) throw new Error('This reward is already claimed on-chain.');
+
+  const winningOutcome = Number(winningOutcomeRaw);
+  const winningBet = winningOutcome === 1 ? draw : winningOutcome === 2 ? sideB : sideA;
+  if (winningBet <= 0n) {
+    throw new Error('This wallet has no winning bet on this market. The portfolio entry may point to a stale duplicate market address.');
+  }
+
   const hash = await writeContract(wagmiConfig, {
     chainId: seismicTestnet.id,
     address: marketAddress,
@@ -141,7 +182,8 @@ export async function claimRewards(marketAddress: `0x${string}`): Promise<void> 
     functionName: 'claim',
     args: []
   });
-  await waitForConfirmedReceipt(hash);
+  const receipt = await waitForConfirmedReceipt(hash);
+  return { hash, receipt };
 }
 
 export async function checkUsdlAllowance(userAddress: `0x${string}`, spenderAddress: `0x${string}`): Promise<bigint> {
