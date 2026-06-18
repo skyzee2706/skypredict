@@ -10,7 +10,8 @@
     "lint": "eslint",
     "indexer:once": "node scripts/indexer-worker.cjs --once",
     "indexer:backfill": "node scripts/indexer-worker.cjs --once --reset --from=1",
-    "indexer:worker": "node scripts/indexer-worker.cjs"
+    "indexer:worker": "node scripts/indexer-worker.cjs",
+    "indexer:reconcile": "node scripts/indexer-worker.cjs --once --reconcile-only"
   },
   "dependencies": {
     "@privy-io/react-auth": "^3.9.0",

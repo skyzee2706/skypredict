@@ -65,7 +65,7 @@ async function readAllPortfolioRows(supabase: ReturnType<typeof getSupabaseAdmin
   for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
     const { data, error } = await supabase
       .from('user_portfolios')
-      .select('user_address, market_address, side_a_amount, draw_amount, side_b_amount, volume, payout, pnl')
+      .select('user_address, market_address, side_a_amount::text, draw_amount::text, side_b_amount::text, volume::text, payout::text, pnl::text')
       .range(from, from + SUPABASE_PAGE_SIZE - 1);
 
     if (error) throw error;
@@ -198,12 +198,12 @@ export async function readSupabasePortfolio(address: string, limit = DEFAULT_ACT
   const [portfolioResult, activityResult, stateResult] = await Promise.all([
     supabase
       .from('user_portfolios')
-      .select('*')
+      .select('user_address, market_address, side_a_amount::text, draw_amount::text, side_b_amount::text, volume::text, payout::text, pnl::text, claimed, updated_at')
       .eq('user_address', user)
       .order('updated_at', { ascending: false }),
     supabase
       .from('user_activities')
-      .select('*')
+      .select('tx_hash, log_index, user_address, market_address, type, outcome, amount::text, block_number::text, timestamp, status, resolved_outcome, payout::text, claimed')
       .eq('user_address', user)
       .order('block_number', { ascending: false })
       .limit(limit),

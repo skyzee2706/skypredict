@@ -149,7 +149,7 @@ export async function POST(request: Request) {
 
     const { data: existingPosition, error: positionError } = await supabase
       .from('user_portfolios')
-      .select('*')
+      .select('user_address, market_address, side_a_amount::text, draw_amount::text, side_b_amount::text, volume::text, payout::text, pnl::text, claimed')
       .eq('user_address', normalizedPayload.userAddress)
       .eq('market_address', normalizedPayload.marketAddress)
       .maybeSingle();

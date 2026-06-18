@@ -10,6 +10,7 @@ loadEnv(path.join(__dirname, '..', '..', '.env'));
 const FactoryArtifact = require('../src/lib/contracts/MarketFactory.json');
 const MarketArtifact = require('../src/lib/contracts/PredictionMarket.json');
 const { dedupeActiveMarketRows } = require('./indexer-market-dedupe.cjs');
+const { computePositionAccounting } = require('./indexer-position-accounting.cjs');
 
 const OptimizedFactoryAbi = [
   {
@@ -52,6 +53,7 @@ const MARKET_FIELDS = [
 const args = new Set(process.argv.slice(2));
 const once = args.has('--once');
 const reset = args.has('--reset');
+const reconcileOnly = args.has('--reconcile-only');
 const fromArg = process.argv.find((arg) => arg.startsWith('--from='));
 const explicitFromBlock = fromArg ? BigInt(fromArg.split('=')[1]) : null;
 
@@ -146,6 +148,7 @@ function getUser(map, address) {
       positions: new Map(),
       activities: [],
       marketResults: new Map(),
+      removedMarkets: new Set(),
     });
   }
   return map.get(key);
@@ -176,7 +179,7 @@ async function readExistingUsers() {
 
   const { data: leaderboardRows, error: lbError } = await supabase
     .from('leaderboard')
-    .select('user_address, volume, payout, side_a_bets, draw_bets, side_b_bets, total_bets');
+    .select('user_address, volume::text, payout::text, side_a_bets, draw_bets, side_b_bets, total_bets');
   if (lbError) throw lbError;
   for (const row of leaderboardRows || []) {
     const user = getUser(users, row.user_address);
@@ -190,7 +193,7 @@ async function readExistingUsers() {
 
   const { data: portfolioRows, error: pfError } = await supabase
     .from('user_portfolios')
-    .select('user_address, market_address, side_a_amount, draw_amount, side_b_amount, volume, payout, pnl, claimed');
+    .select('user_address, market_address, side_a_amount::text, draw_amount::text, side_b_amount::text, volume::text, payout::text, pnl::text, claimed');
   if (pfError) throw pfError;
   for (const row of portfolioRows || []) {
     const user = getUser(users, row.user_address);
@@ -209,7 +212,7 @@ async function readExistingUsers() {
 
   const { data: activityRows, error: activityError } = await supabase
     .from('user_activities')
-    .select('tx_hash, log_index, market_address, user_address, type, outcome, amount, block_number, timestamp, status, resolved_outcome, payout, claimed');
+    .select('tx_hash, log_index, market_address, user_address, type, outcome, amount::text, block_number::text, timestamp, status, resolved_outcome, payout::text, claimed');
   if (activityError) throw activityError;
   for (const row of activityRows || []) {
     indexedActivityKeys.add(`${row.tx_hash}:${row.log_index}`);
@@ -546,14 +549,20 @@ async function reconcilePositions(users) {
     user.draw = 0;
     user.sideB = 0;
 
+    const marketsToRemove = [];
     for (const market of user.markets) {
-      const [position, marketState, pools] = await Promise.all([
+      const [positionResult, marketState, pools] = await Promise.all([
         client.readContract({
           address: market,
           abi: MarketArtifact.abi,
           functionName: 'getUserPosition',
           args: [user.address],
-        }).catch(() => [0n, 0n, 0n, false]),
+        })
+          .then((value) => ({ ok: true, value }))
+          .catch((error) => {
+            console.warn('[indexer] failed to read user position user=' + user.address + ' market=' + market + ':', error.shortMessage || error.message);
+            return { ok: false, value: null };
+          }),
         Promise.all([
           client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'resolved' }).catch(() => false),
           client.readContract({ address: market, abi: MarketArtifact.abi, functionName: 'winningOutcome' }).catch(() => 0),
@@ -565,58 +574,47 @@ async function reconcilePositions(users) {
         ]),
       ]);
 
-      const raw = Array.isArray(position) ? position : [0n, 0n, 0n, false];
-      const sideA = BigInt(raw[0] || 0n);
-      const draw = BigInt(raw.length >= 4 ? raw[1] || 0n : 0n);
-      const sideB = BigInt(raw.length >= 4 ? raw[2] || 0n : raw[1] || 0n);
-      const total = sideA + draw + sideB;
-      if (total <= 0n) continue;
+      if (!positionResult.ok) continue;
 
-      user.sideA += sideA > 0n ? 1 : 0;
-      user.draw += draw > 0n ? 1 : 0;
-      user.sideB += sideB > 0n ? 1 : 0;
+      const accounting = computePositionAccounting({
+        position: positionResult.value,
+        resolved: Boolean(marketState[0]),
+        winner: marketState[1],
+        pools,
+      });
 
-      const resolved = Boolean(marketState[0]);
-      const winner = Number(marketState[1] || 0);
-      const winningPosition = winner === 1 ? draw : winner === 2 ? sideB : sideA;
-      let positionValue = 0n;
-
-      if (!resolved) {
-        // Unrealized position: keep open markets neutral, same as current stake value.
-        positionValue = total;
-      } else if (winningPosition > 0n) {
-        // Match PredictionMarket.claim():
-        // totalPayout = userWinningBet * totalPool / winningPool
-        // userPayout = totalPayout - 10% fee
-        const sideAPool = BigInt(pools[0] || 0n);
-        const drawPool = BigInt(pools[1] || 0n);
-        const sideBPool = BigInt(pools[2] || 0n);
-        const totalPool = sideAPool + drawPool + sideBPool;
-        const winningPool = winner === 1 ? drawPool : winner === 2 ? sideBPool : sideAPool;
-        if (totalPool > 0n && winningPool > 0n) {
-          const grossPayout = (winningPosition * totalPool) / winningPool;
-          const fee = (grossPayout * 10n) / 100n;
-          positionValue = grossPayout - fee;
-        }
+      if (!accounting) {
+        user.positions.delete(market);
+        user.marketResults.delete(market);
+        user.removedMarkets.add(market);
+        marketsToRemove.push(market);
+        continue;
       }
 
-      user.positionValue += positionValue;
-      user.volume += total;
+      user.sideA += accounting.sideA > 0n ? 1 : 0;
+      user.draw += accounting.draw > 0n ? 1 : 0;
+      user.sideB += accounting.sideB > 0n ? 1 : 0;
+      user.positionValue += accounting.payout;
+      user.volume += accounting.volume;
       user.positions.set(market, {
-        sideA,
-        draw,
-        sideB,
-        volume: total,
-        payout: positionValue,
-        pnl: positionValue - total,
-        claimed: Boolean(raw[3]),
+        sideA: accounting.sideA,
+        draw: accounting.draw,
+        sideB: accounting.sideB,
+        volume: accounting.volume,
+        payout: accounting.payout,
+        pnl: accounting.pnl,
+        claimed: accounting.claimed,
       });
       user.marketResults.set(market, {
-        resolved,
-        winner,
-        positionValue,
-        claimed: Boolean(raw[3]),
+        resolved: accounting.resolved,
+        winner: accounting.winner,
+        positionValue: accounting.payout,
+        claimed: accounting.claimed,
       });
+    }
+
+    for (const market of marketsToRemove) {
+      user.markets.delete(market);
     }
 
     // PNL is claimable/current value minus trading volume.
@@ -625,7 +623,6 @@ async function reconcilePositions(users) {
     user.trades = Math.max(user.trades, user.sideA + user.draw + user.sideB);
   }
 }
-
 function getPositionVolume(position) {
   const sideTotal = position.sideA + position.draw + position.sideB;
   return position.volume > 0n ? position.volume : sideTotal;
@@ -759,6 +756,7 @@ async function cleanupFinalizedRunningActivities() {
 async function save(users, leaderboardRows, lastProcessedBlock) {
   const now = new Date().toISOString();
   const portfolioRows = [];
+  const portfolioDeleteRows = [];
   const activityRows = [];
 
   for (const user of users.values()) {
@@ -785,7 +783,19 @@ async function save(users, leaderboardRows, lastProcessedBlock) {
         updated_at: now,
       });
     }
+    for (const market of user.removedMarkets || []) {
+      portfolioDeleteRows.push({ user_address: user.address, market_address: market });
+    }
     activityRows.push(...user.activities);
+  }
+
+  for (const row of portfolioDeleteRows) {
+    const { error } = await supabase
+      .from('user_portfolios')
+      .delete()
+      .eq('user_address', row.user_address)
+      .eq('market_address', row.market_address);
+    if (error) throw error;
   }
 
   if (portfolioRows.length) {
@@ -816,15 +826,30 @@ async function save(users, leaderboardRows, lastProcessedBlock) {
   if (error) throw error;
 }
 
+async function reconcileIndexedUsers(lastProcessedBlock) {
+  const { users } = await readExistingUsers();
+  await reconcilePositions(users);
+  applyActivityResults(users);
+  const leaderboardRows = buildLeaderboard(users);
+  await save(users, leaderboardRows, lastProcessedBlock);
+  await cleanupFinalizedRunningActivities();
+  console.log(`[indexer] reconciled portfolios=${leaderboardRows.length}, lastProcessedBlock=${lastProcessedBlock}`);
+}
+
 async function tick() {
   if (reset) await resetTables();
   const latest = await client.getBlockNumber();
+  let last = explicitFromBlock !== null ? explicitFromBlock - 1n : await getState();
+  if (reconcileOnly) {
+    await reconcileIndexedUsers(last > 0n ? last : START_BLOCK - 1n);
+    return;
+  }
+
   const markets = await getMarkets();
 
   console.log(`[indexer] markets=${markets.length}, refreshing active market cache`);
   await syncActiveMarkets(markets);
 
-  let last = explicitFromBlock !== null ? explicitFromBlock - 1n : await getState();
   if (last <= 0n) last = START_BLOCK - 1n;
   const fromBlock = last + 1n;
   const targetBlock = fromBlock + BLOCKS_PER_TICK - 1n > latest ? latest : fromBlock + BLOCKS_PER_TICK - 1n;

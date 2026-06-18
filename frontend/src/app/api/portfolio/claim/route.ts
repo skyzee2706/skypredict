@@ -122,7 +122,7 @@ export async function POST(request: Request) {
 
     const { data: position, error: positionError } = await supabase
       .from('user_portfolios')
-      .select('volume')
+      .select('volume::text')
       .eq('user_address', normalizedPayload.userAddress)
       .eq('market_address', normalizedPayload.marketAddress)
       .maybeSingle();
