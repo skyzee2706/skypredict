@@ -1,12 +1,18 @@
+import { toBigIntString } from '../numbers/bigintString';
+
 type PortfolioPositionLike = {
   market: string;
   claimed?: boolean;
+  volume?: string | number | bigint | null;
+  payout?: string | number | bigint | null;
+  pnl?: string | number | bigint | null;
 };
 
 type PortfolioActivityLike = {
   market: string;
   status?: string;
   claimed?: boolean;
+  payout?: string | number | bigint | null;
 };
 
 type PortfolioLike = {
@@ -27,6 +33,20 @@ function normalizeAddress(address: string) {
 function shouldMarkActivityClaimed(activity: PortfolioActivityLike) {
   const status = String(activity.status || '').toUpperCase();
   return status === 'WIN' || status === 'CLAIMED';
+}
+
+function applyClaimPayout<T extends PortfolioPositionLike>(position: T, payout?: string | number | bigint | null): T {
+  if (payout === undefined || payout === null) return { ...position, claimed: true };
+
+  const payoutValue = toBigIntString(payout);
+  const volume = BigInt(toBigIntString(position.volume));
+  const pnl = (BigInt(payoutValue) - volume).toString();
+  return {
+    ...position,
+    claimed: true,
+    payout: payoutValue,
+    pnl,
+  };
 }
 
 export function isAlreadyClaimedOnChainError(error: unknown) {
@@ -52,19 +72,25 @@ export function getClaimableUnclaimedMarketAddresses(positions: ClaimablePositio
   return [...addresses];
 }
 
-export function markPortfolioMarketClaimed<T extends PortfolioLike>(portfolio: T, marketAddress: string): T {
+export function markPortfolioMarketClaimed<T extends PortfolioLike>(portfolio: T, marketAddress: string, payout?: string | number | bigint | null): T {
   const target = normalizeAddress(marketAddress);
+  const payoutValue = payout === undefined || payout === null ? undefined : toBigIntString(payout);
 
   return {
     ...portfolio,
     positions: portfolio.positions?.map((position) => (
       normalizeAddress(position.market) === target
-        ? { ...position, claimed: true }
+        ? applyClaimPayout(position, payoutValue)
         : position
     )),
     activity: portfolio.activity.map((activity) => (
       normalizeAddress(activity.market) === target && shouldMarkActivityClaimed(activity)
-        ? { ...activity, status: 'CLAIMED', claimed: true }
+        ? {
+            ...activity,
+            status: 'CLAIMED',
+            claimed: true,
+            ...(payoutValue === undefined ? {} : { payout: payoutValue }),
+          }
         : activity
     )),
   };

@@ -267,7 +267,7 @@ export default function PortfolioPage() {
         setClaiming(marketAddress);
         try {
             const result = await claimRewards(marketAddress);
-            setCachedPortfolio((current) => current ? markPortfolioMarketClaimed(current, marketAddress) : current);
+            setCachedPortfolio((current) => current ? markPortfolioMarketClaimed(current, marketAddress, result.payout.toString()) : current);
             showToast("Claim validated on-chain.", "success");
             void persistClaimedPortfolioPosition({
                 txHash: result.hash,
@@ -423,7 +423,7 @@ export default function PortfolioPage() {
                                 Portfolio
                             </h1>
                             <p style={{ color: "var(--text-muted)", marginTop: "8px" }}>
-                                {address ? `Wallet ${shortAddress(address)}` : "Connect wallet to view PNL, volume, history, and claims."}
+                                {address ? `Wallet ${shortAddress(address)}` : "Connect wallet to view Realized PNL, volume, history, and claims."}
                             </p>
                         </div>
                         <button onClick={loadPortfolio} style={{ border: "1px solid var(--border)", background: "var(--bg-card)", color: "var(--text-primary)", padding: "12px 16px", borderRadius: "14px", fontWeight: 800, cursor: "pointer" }}>
@@ -433,7 +433,7 @@ export default function PortfolioPage() {
 
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: "14px", marginBottom: "24px" }}>
                         <div style={{ padding: "18px", borderRadius: "20px", border: "1px solid rgba(34,197,94,0.28)", background: "linear-gradient(135deg,rgba(34,197,94,0.12),rgba(255,255,255,0.04))" }}>
-                            <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>PNL</p>
+                            <p style={{ color: "var(--text-muted)", fontSize: "12px", fontWeight: 800 }}>Realized PNL</p>
                             <p style={{ color: userStats.pnl < 0 ? "#fb7185" : "#22c55e", fontSize: "28px", fontWeight: 950, marginTop: "8px", fontFamily: "monospace" }}>
                                 {`${userStats.pnl < 0 ? "-" : "+"}${formatAmount(Math.abs(userStats.pnl))}`}
                             </p>
@@ -518,6 +518,7 @@ export default function PortfolioPage() {
                                     const isWinner = Boolean(item.isWinner);
                                     const isClaimed = isWinner && Boolean(claimPosition?.claimed);
                                     const isClaimable = isWinner && !isClaimed && Boolean(claimPosition?.canClaim);
+                                    const realizedPnl = claimPosition ? claimPosition.positionValue - claimPosition.total : (isResolved && !isWinner ? -item.total : 0);
                                     const statusLabel = !isResolved ? "Running" : isWinner ? (isClaimed ? "Claimed" : "Win") : "Lose";
                                     const statusColor = !isResolved ? "#facc15" : isWinner ? "#22c55e" : "#fb7185";
                                     return (
@@ -539,7 +540,8 @@ export default function PortfolioPage() {
                                                 <div>Status: <b style={{ color: statusColor }}>{statusLabel}</b></div>
                                                 <div>{market.sideAName || "YES"}: {formatAmount(item.sideA)} · Draw: {formatAmount(item.draw)} · {market.sideBName || "NO"}: {formatAmount(item.sideB)}</div>
                                                 {isClaimable && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable total: {formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
-                                                {isClaimed && isWinner && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed win: +{formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
+                                                {isClaimed && isWinner && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed total: {formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
+                                                {isResolved && (isClaimed || !isWinner) && <div style={{ color: realizedPnl < 0 ? "#fb7185" : "#22c55e", fontWeight: 900 }}>Realized PNL: {realizedPnl < 0 ? "-" : "+"}{formatAmount(Math.abs(realizedPnl))} SkyUSD</div>}
                                             </div>
                                             {isClaimable ? (
                                                 <button

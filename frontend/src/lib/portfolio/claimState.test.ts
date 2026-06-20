@@ -28,6 +28,38 @@ test('markPortfolioMarketClaimed marks the matching position and winning activit
   assert.equal(updated.activity[2].status, 'WIN');
 });
 
+test('markPortfolioMarketClaimed applies final claim payout and realized pnl immediately', () => {
+  const portfolio = {
+    marketAddresses: ['0xAAA0000000000000000000000000000000000000'],
+    positions: [
+      {
+        market: '0xAAA0000000000000000000000000000000000000',
+        claimed: false,
+        volume: '10000000000000000000',
+        payout: '10000000000000000000',
+        pnl: '0',
+      },
+    ],
+    activity: [
+      { market: '0xAAA0000000000000000000000000000000000000', status: 'WIN', claimed: false, payout: '0' },
+    ],
+    updatedAt: 1,
+  };
+
+  const updated = markPortfolioMarketClaimed(
+    portfolio,
+    '0xaaa0000000000000000000000000000000000000',
+    '18000000000000000000',
+  );
+
+  assert.equal(updated.positions[0].claimed, true);
+  assert.equal(updated.positions[0].payout, '18000000000000000000');
+  assert.equal(updated.positions[0].pnl, '8000000000000000000');
+  assert.equal(updated.activity[0].status, 'CLAIMED');
+  assert.equal(updated.activity[0].claimed, true);
+  assert.equal(updated.activity[0].payout, '18000000000000000000');
+});
+
 test('markPortfolioMarketClaimed does not mutate the previous portfolio object', () => {
   const portfolio = {
     positions: [{ market: '0xAAA0000000000000000000000000000000000000', claimed: false }],

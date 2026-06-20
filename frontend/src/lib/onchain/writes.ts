@@ -1,4 +1,4 @@
-import { Abi, createPublicClient, http, parseEther, type TransactionReceipt } from 'viem';
+import { Abi, createPublicClient, decodeEventLog, http, parseEther, parseAbiItem, type TransactionReceipt } from 'viem';
 import { getAccount, writeContract, switchChain, getChainId } from '@wagmi/core';
 import { seismicTestnet } from './seismicChain';
 import { wagmiConfig } from './wagmiConfig';
@@ -6,6 +6,7 @@ import PredictionMarketArtifact from '../contracts/PredictionMarket.json';
 import { TOKEN_ADDRESS, SKYUSD_ABI, SKYUSD_MULTIPLIER, ROUTER_ADDRESS, ROUTER_ABI } from '../constants';
 
 const MARKET_ABI = PredictionMarketArtifact.abi as unknown as Abi;
+const ClaimedEvent = parseAbiItem('event Claimed(address indexed user, uint256 payout)');
 
 function getPublicClient() {
   return createPublicClient({
@@ -36,6 +37,7 @@ export type MarketOutcome = 'YES' | 'NO' | 'DRAW';
 export type ClaimRewardsResult = {
   hash: `0x${string}`;
   receipt: TransactionReceipt;
+  payout: bigint;
 };
 
 /**
@@ -137,6 +139,25 @@ export async function placeBet(marketAddress: `0x${string}`, outcome: MarketOutc
   return { hash, receipt, amountInUnits, outcome };
 }
 
+function readClaimedPayoutFromReceipt(receipt: TransactionReceipt, marketAddress: `0x${string}`, userAddress: `0x${string}`) {
+  const expectedMarket = marketAddress.toLowerCase();
+  const expectedUser = userAddress.toLowerCase();
+
+  for (const log of receipt.logs) {
+    if (log.address.toLowerCase() !== expectedMarket) continue;
+    try {
+      const decoded = decodeEventLog({ abi: [ClaimedEvent], data: log.data, topics: log.topics });
+      if (decoded.eventName !== 'Claimed') continue;
+      const args = decoded.args as { user?: string; payout?: bigint };
+      if (args.user?.toLowerCase() === expectedUser && args.payout !== undefined) return args.payout;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error('Claim transaction did not emit a matching payout event.');
+}
+
 export async function claimRewards(marketAddress: `0x${string}`): Promise<ClaimRewardsResult> {
   await ensureRitualWallet();
   const publicClient = getPublicClient();
@@ -183,7 +204,8 @@ export async function claimRewards(marketAddress: `0x${string}`): Promise<ClaimR
     args: []
   });
   const receipt = await waitForConfirmedReceipt(hash);
-  return { hash, receipt };
+  const payout = readClaimedPayoutFromReceipt(receipt, marketAddress, account.address as `0x${string}`);
+  return { hash, receipt, payout };
 }
 
 export async function checkUsdlAllowance(userAddress: `0x${string}`, spenderAddress: `0x${string}`): Promise<bigint> {
