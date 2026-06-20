@@ -518,7 +518,6 @@ export default function PortfolioPage() {
                                     const isWinner = Boolean(item.isWinner);
                                     const isClaimed = isWinner && Boolean(claimPosition?.claimed);
                                     const isClaimable = isWinner && !isClaimed && Boolean(claimPosition?.canClaim);
-                                    const realizedPnl = claimPosition ? claimPosition.positionValue - claimPosition.total : (isResolved && !isWinner ? -item.total : 0);
                                     const statusLabel = !isResolved ? "Running" : isWinner ? (isClaimed ? "Claimed" : "Win") : "Lose";
                                     const statusColor = !isResolved ? "#facc15" : isWinner ? "#22c55e" : "#fb7185";
                                     return (
@@ -541,7 +540,6 @@ export default function PortfolioPage() {
                                                 <div>{market.sideAName || "YES"}: {formatAmount(item.sideA)} · Draw: {formatAmount(item.draw)} · {market.sideBName || "NO"}: {formatAmount(item.sideB)}</div>
                                                 {isClaimable && <div style={{ color: "#22c55e", fontWeight: 900 }}>Claimable total: {formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
                                                 {isClaimed && isWinner && <div style={{ color: "#60a5fa", fontWeight: 900 }}>Claimed total: {formatAmount(claimPosition?.positionValue ?? 0)} SkyUSD</div>}
-                                                {isResolved && (isClaimed || !isWinner) && <div style={{ color: realizedPnl < 0 ? "#fb7185" : "#22c55e", fontWeight: 900 }}>Realized PNL: {realizedPnl < 0 ? "-" : "+"}{formatAmount(Math.abs(realizedPnl))} SkyUSD</div>}
                                             </div>
                                             {isClaimable ? (
                                                 <button
